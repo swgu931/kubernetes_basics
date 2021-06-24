@@ -1,0 +1,28 @@
+# 4일차 과제
+
+## install
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v0.46.0/deploy/static/provider/baremetal/deploy.yaml
+
+
+## 실습과제 (제공파일 수행)
+
+kubectl create -f echo-hostname.yaml
+kubectl create -f internal-service.yaml
+kubectl create -f mandatory.yaml
+
+kubectl apply -f ingress.yaml
+kubectl apply -f ingress-svc-nodeport.yaml
+kubectl get svc --all-namespace
+
+## hostname-service 의 cluster ip 10.103.11.34 확인
+
+## 아래 동작 확인함.
+curl --resolve master.example.com:80:10.103.11.34 master.example.com:80/echo-hostname
+
+## 아래 동작은 curl: no URL specified!  로 출력됨
+curl --resolve master.example.com:30000:10.103.11.34 master.example.com:30000/echo-hostname
+
+
+
+
+

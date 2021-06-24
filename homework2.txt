@@ -1,0 +1,60 @@
+#문제1
+
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: my-nginx-rs
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: my-nginx
+  template:
+    metadata:
+      name: my-nginx-pod
+      labels:
+        app: my-nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.14.2
+        ports:
+        - containerPort: 80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-nginx-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: my-nginx
+  template:
+    metadata:
+      name: my-nginx-pod
+      labels:
+        app: my-nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.14.2
+        ports:
+        - containerPort: 80
+---
+
+
+#문제2
+
+kubectl scale rs my-nginx-rs --replicas=5
+kubectl scale deployment my-nginx-deployment --replicas=5
+
+
+
+#문제3
+
+kubectl set image deploy my-nginx-deployment nginx=nginx:1.19.5 --record
+
+
+

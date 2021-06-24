@@ -1,0 +1,189 @@
+# 2일차 강의
+
+
+
+kubectl create deployment mainui --image=httpd --replicas=3
+
+kubectl exec nginxserver -it -- /bin/bash
+
+kubectl get pod nginxserver -o yaml
+
+kubectl delete deployment,pod,rs --all
+
+kubectl run nginxserver --image=nginx:latest --port=80 --dry-run -o yaml > nginxserver-pod.yaml
+
+  https://kubernetes.io/ko/docs/concepts/overview/kubernetes-api/
+
+kubectl run nginxweb --image=nginx:latest --port=80
+watch kubectl get pods
+
+---
+cat > nginx-pod.yaml
+apiVersion: v1
+kind: pod
+metadata:
+  name: my-nginx-pod
+spec:
+  containers:
+  - name: my-nginx-container
+    image: nginx:latest
+    ports:
+    - containerPort: 80
+      protocol: TCP
+---
+
+cat > multi-con-pod.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multi-container-pod
+spec:
+  containers:
+  - name: nginx-container
+    image: nginx:latest
+    ports:
+    - containerPort: 80
+      protocol: TCP
+
+  - name: centos-container
+    image: centos:8
+    command: ["tail"]
+    args: ["-f", "/dev/null"]
+
+---
+
+kubectl get pods my-nginx-pod -o yaml
+
+
+kubectl exec multi-container-pod -it -c centos-container -- /bin/bash
+kubectl exec multi-container-pod -it -c nginx-container -- /bin/bash
+
+kubectl get events --all-namespaces --sort-by='.metadata.creationTimestamp'
+
+
+---
+cat > nginxserver-pod.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  
+  labels:
+    run: nginxserver
+  name: nginxserver
+spec:
+  containers:
+  - image: nginx:latest
+    name: nginxserver
+    ports:
+    - containerPort: 80
+---
+
+
+
+
+---
+apiVersion: apps/v1
+kind: Deployments
+metadata:
+  name: my-nginx-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: my-nginx
+  template:
+    metadata:
+      name: my-nginx-pod
+      labels:
+        app: my-nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.10
+        ports:
+        - containerPort: 80
+---
+
+
+---
+apiVersion: v1
+kind: ReplicationController
+metadata:
+  name: myapp-rc
+spec:
+  replicas: 3
+  selector:
+    app: myapp
+    type: front-end
+  template:
+    metadata:
+      labels:
+        app: myapp
+        type: front-end
+    spec:
+      containers:
+      - name: nginx-container
+        image: nginx:1.14
+---
+
+kubectl run redis --image=redis --labels=app=webui --dry-run -o yaml > redis.yaml
+
+
+
+cat > deployment-nginx.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-nginx-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: my-nginx
+  template:
+    metadata:
+      name: my-nginx-pod
+      labels:
+        app: my-nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.10
+        ports:
+        - containerPort: 80
+-----
+
+kubectl scale deployment my-nginx-deployment --replicas=5
+kubectl scale -f deployment-nginx.yaml --replicas=5
+
+
+kubectl create -f deployment-nginx.yaml --record
+
+kubectl set image deploy my-nginx-deployment nginx=nginx:1.15 --record
+kubectl set image deploy my-nginx-deployment nginx=nginx:1.16 --record
+kubectl set image deploy my-nginx-deployment nginx=nginx:1.17 --record
+
+
+kubectl rollout status deploy my-nginx-deployment
+kubectl rollout pause deploy my-nginx-deployment
+kubectl rollout resume deploy my-nginx-deployment
+
+
+kubectl rollout history deployment my-nginx-deployment
+
+kubectl rollout undo deployment my-nginx-deployment --to-revision=34
+kubectl rollout history deployment my-nginx-deployment deployment.apps/my-nginx-deployment
+
+
+
+
+
+
+
+
+
+
+
+
+

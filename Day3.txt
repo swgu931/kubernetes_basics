@@ -1,0 +1,331 @@
+# 3일차 강의
+
+
+---
+apiVersion: v1
+kind: ReplicationController
+metadata:
+  name: myapp-rc
+spec:
+  replicas: 3
+  selector:
+    app: myapp
+    type: front-end
+  template:
+    metadata:
+      labels:
+        app: myapp
+        type: front-end
+    spec:
+      containers:
+      - name: nginx-container
+        image: nginx:1.14
+---
+
+kubectl run redis --image=redis --labels=app=webui --dry-run -o yaml > redis.yaml
+
+
+
+cat > deployment-nginx.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-nginx-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: my-nginx
+  template:
+    metadata:
+      name: my-nginx-pod
+      labels:
+        app: my-nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.10
+        ports:
+        - containerPort: 80
+-----
+
+kubectl scale deployment my-nginx-deployment --replicas=5
+kubectl scale -f deployment-nginx.yaml --replicas=5
+
+
+kubectl create -f deployment-nginx.yaml --record
+
+kubectl set image deploy my-nginx-deployment nginx=nginx:1.15 --record
+kubectl set image deploy my-nginx-deployment nginx=nginx:1.16 --record
+kubectl set image deploy my-nginx-deployment nginx=nginx:1.17 --record
+
+
+kubectl rollout status deploy my-nginx-deployment
+kubectl rollout pause deploy my-nginx-deployment
+kubectl rollout resume deploy my-nginx-deployment
+
+
+kubectl rollout history deployment my-nginx-deployment
+
+kubectl rollout undo deployment my-nginx-deployment --to-revision=34
+kubectl rollout history deployment my-nginx-deployment deployment.apps/my-nginx-deployment
+
+
+===========================================================================================
+질문:
+- yaml 작성시에 스칼라로 작성하는 것과 배열형태로 작성하는 것에 대한 규칙이 있는지요? 룰이 없이 랜덤해보여서요.
+- daemonset을 statefulset 처럼 사용하려면 어떻게 해야 하나요?
+
+
+kubectl create -f daemonset-nginx.yaml --record
+
+kubectl get daemonsets.app
+kubectl delete daemonsets.app nginx-deamonset
+
+
+kubeadm token list
+kubeadm token create --ttl ...
+
+
+# rolling update
+kubectl describe pod nginx-daemonset-6b2f8
+
+kubectl edit daemonsets.apps nginx-daemonset
+   .container.image version change to v1.15
+
+
+# roll back
+kubectl rollout undo daemonset nginx-daemonset
+
+kubectl rollout history daemonset nginx-daemonset
+
+
+---
+kubectl create -f statefulset-ex1.yaml --record
+kubectl scale statefulset statefulset-nginx --replica=4
+kubectl scale statefulset statefulset-nginx --replica=2
+
+
+kubectl edit statefulsets.apps statefulset-nginx
+kubectl rollout undo statefulsets.apps statefulset-nginx
+
+kubectl rollout history statefulsets statefulset-nginx
+
+---
+
+kubectl run testpod --image=centos:8 --command sleep 5
+kubectl delete pod testpod
+
+
+kubectl create -f job-centos.yaml --record
+
+kubectl get job, pods
+kubectl get pods
+
+kubectl describe jobs.batch centos-job
+
+
+kubectl delete job.apps centos-job
+
+
+kubectl rollout history jobs centos-job 
+  --> error
+
+
+---
+
+kubectl create -f cronjob-centos.yaml
+kubectl get daemonset
+  -- 웬 daemonset ???
+kubectl get pods
+
+kubectl delete pod xxx
+kubectl edit ds centos-cronjob
+
+kubectl rollout undo daemonset xxx
+
+kubectl delete daemonsets.apps
+
+-----------------------------------------
+
+kubectl run nginxserver --image=nginx:latest --port 80
+
+
+---
+
+
+kubectl create -f deployment-nginx.yaml
+
+
+cat > hostname-clusterip-service.yaml
+
+kubectl create -f hostname-clusterip-service.yaml --record
+kubectl describe svc hostname-clusterip-service
+kubectl get endpoints
+
+kubectl exec -it nginx-deploy-6d5ff49975-99pmk -- /bin/bash
+ # echo "ClusterIP Test Pages #1" > /usr/share/nginx/html/index.html
+
+kubectl exec -it nginx-deploy-6d5ff49975-pknph -- /bin/bash
+  # echo "ClusterIP Test Pages #2" > /usr/share/nginx/html/index.html
+
+kubectl exec -it nginx-deploy-6d5ff49975-v98mt -- /bin/bash
+  # echo "ClusterIP Test Pages #3" > /usr/share/nginx/html/index.html
+
+
+curl 10.100.100.100:8080
+
+kubectl scale deployment nginx-deploy --replicas=5
+kubectl describe svc hostname-clusterip-service
+kubectl get endpoints
+
+
+kubectl delete svc hostname-clusterip-service
+kubectl delete deployment,pod,rs --all
+
+
+
+
+----------
+
+cat > hostname-nodeport-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: hostname-nodeport-service
+spec:
+  type: NodePort
+  clusterIP: 10.100.100.200
+  selector:
+    app: web
+  ports:
+  - name: web-port
+    protocol: TCP
+    port: 80
+    targetPort: 80
+    nodePort: 30200
+
+---
+kubectl delete svc hostname-clusterip-service
+kubectl create -f hostname-nodeport-service.yaml
+
+curl 10.100.100.200
+curl 10.100.100.200:80
+
+
+curl gce-k8s-master:30200
+curl gce-k8s-worker1:30200
+curl gce-k8s-worker2:30200
+
+curl master_node_ip:30200
+curl worker2_node_ip:30200
+curl worker2_node_ip:30200
+
+
+
+
+kubectl logs nginx-deploy-6d5ff49975-99pmk
+
+kubectl describe svc hostname-nodeport-service
+kubectl delete svc hostname-nodeport-service
+
+?? nodeport, targetport, port 가 서로 어떻게 연결되는지요? clusterIP 의 port, targetPort 와도 함께 설명가능할지요?
+   모두 80 으로 되어 있어서 구분이 안가서요.
+
+
+
+
+-----
+kubectl create deployment np-pods --image=sysnet4admin/echo-hname
+kubectl scale deployment np-pods --replicas=3
+
+cat > nodeport.yaml
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: np-svc
+spec:
+  selector:
+   app: np-pods
+  ports:
+  - name: http
+    protocol: TCP
+    port: 80
+    targetPort: 80
+    nodePort: 30000
+  type: NodePort
+------------------------------
+
+kubectl create -f nodeport.yaml
+
+
+---
+cat > tomcat-pod.yaml
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-tomcat
+  labels:
+    app: tomcat8
+spec:
+  containers:
+  - name: tomcat-test
+    image: tomcat:8
+    ports:
+    - containerPort: 8080
+
+----------------------------
+
+kubectl create -f tomcat-pod.yaml
+
+kubectl cp tomcatEx.war pod-tomcat:/usr/local/tomcat/webapps/
+
+kubectl exec -it pod-tomcat -- /bin/bash
+
+cat > tomcat-nodeport-service.yaml
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tomcat-nodeport-service
+  labels:
+    name: service-tomcat
+spec:
+  type: NodePort
+  selector:
+    app: tomcat8
+  ports:
+  - name: "tomcat8-nework-setting"
+    protocol: TCP
+    port: 8088
+    targetPort: 8080
+    nodePort: 30001
+
+---
+kubectl create -f tomcat-nodeport-service.yaml
+
+# 아래 사이트 접속
+
+http://34.64.71.122:30001/tomcatEx/Test.jsp
+http://34.64.183.127:30001/tomcatEx/Test.jsp
+http://34.64.125.25:30001/tomcatEx/Test.jsp
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

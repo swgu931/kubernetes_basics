@@ -1,0 +1,493 @@
+# 4일차
+
+
+MetalLB installation
+
+
+kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.9.6/manifests/namespace.yaml
+kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.9.6/manifests/metallb.yaml
+# On first install only
+kubectl create secret generic -n metallb-system memberlist --from-literal=secretkey="$(openssl rand -base64 128)"
+
+
+gce-k8s-master	asia-northeast3-a	
+10.178.0.35 (nic0)	34.64.71.122 	
+gce-k8s-worker1	asia-northeast3-a	
+10.178.0.36 (nic0)	34.64.183.127 	
+gce-k8s-worker2	asia-northeast3-a	
+10.178.0.37 (nic0)	34.64.125.25 	
+
+
+
+
+======================
+vi /etc/hosts
+
+10.178.0.35  gce-k8s-master.example.com  gce-k8s-master
+10.178.0.36  gce-k8s-worker1.example.com  gce-k8s-worker1
+10.178.0.37  gce-k8s-worker2.example.com  gce-k8s-worker2
+
+
+
+kubectl create -f externalname-nginx.yaml
+
+
+kubectl run testpod -it --image=centos:8 /bin/bash
+/# curl externalname-service.default.svc.cluster.local
+/# exit
+
+kubectl delete pod testpod
+kubectl delete svc externalname-service
+
+
+===
+kubectl create -f deployment-nginx.yaml
+
+cat > headless-nginx.yaml 
+apiVersion: v1
+kind: Service
+metadata:
+  name: headless-service
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app: web
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+
+---
+
+kubectl describe svc headless-service
+
+
+kubectl exec -it nginx-deploy-6d5ff49975-brrpg -- /bin/bash
+
+/#
+cat /etc/resolv.conf
+
+curl 10-44-0-2.default.pod.cluster.local
+curl 10-47-0-1.default.pod.cluster.local
+curl 10-47-0-2.default.pod.cluster.local
+
+
+
+=================
+Kube Proxy
+ 쿠버네티스 서비스의 백엔드 구현
+ 엔드포인트 연결을 위한 iptables 구성
+ nodePort로 접근 포드 연결 구현
+Kube Proxy은 iptables 룰을 만들어 포드에 접근할 수 있도록 함
+
+Iptables 룰 확인
+```
+ssh worker1
+
+iptables -t nat -S | grep 80
+
+
+=================
+
+Namespace
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: test
+spec:
+  limits:
+  - default:
+      cpu: 1
+    defaultRequest:
+      cpu: 0.5
+    type: Container
+
+
+kubuctl create namespace XXX
+kubuctl get namespaces
+
+kubuctl create namespace XXX –dry-run –o yaml > XXX.yaml
+vi XXX.yaml
+kubuctl create –f XXX.yaml
+
+
+
+kubectl get pods -n default
+kubectl get pods -n kube-system
+
+
+kubectl create namespace flower
+
+kubectl create namespace bird --dry-run -o yaml
+kubectl create namespace bird --dry-run -o yaml > bird-ns.yaml
+kubectl create -f bird-ns.yaml
+
+
+---
+cat > nginx-pod-with-ubuntu.yaml
+
+
+kubectl create -f nginx-pod-with-ubuntu.yaml -n bird
+kubectl get pods -n bird
+
+---
+cat > production-namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: production
+---
+
+kubectl apply -f production-namespace.yaml
+or
+kubectl create namespace production
+
+---
+cat > hostname-deploy-svc-ns.yaml
+
+kubectl apply -f hostname-deploy-svc-ns.yaml
+
+kubectl get pods,services -n production
+
+
+#Namespace 서비스에 접근하기
+
+kubectl run -i --tty --rm debug --image=alicek106/ubuntu:curl --restart=Never -- bash
+/# 
+curl hostname-svc-clusterip-ns.production.svc:8080 --silent | grep Hello
+exit
+<서비스 이름>.<네임스페이스 이름>.svc
+
+
+kubectl api-resources --namespaced=true
+kubectl api-resources --namespaced=false
+
+kubectl delete namespaces bird
+kubectl delete namespaces flower
+
+
+# Namespace switch
+
+kubectl config view
+kubectl config set-context bird@kubernetes --cluster=kubernetes --user=kubernetes-admin --namespace=bird
+kubectl config view
+
+kubectl config current-context
+kubectl config use-context bird@kubernetes
+kubectl config current-context
+
+
+kubectl get pods
+kubectl get pods -n default
+kubectl delete pods my-nginx-pod -n default
+
+kubectl config use-context kubernetes-admin@kubernetes
+kubectl get pods
+kubectl config current-context
+
+kubectl config use-context kubernetes-admin@kubernetes
+kubectl get pods
+kubectl config current-context
+
+
+
+
+
+=======================
+# ConfigMap
+
+kubectl create configmap log-level-configmap --from-literal LOG_LEVEL=DEBUG
+kubectl create configmap start-k8s --from-literal k8s=kubernetes --from-literal container=docker
+kubectl get configmaps
+kubectl describe configmap start-k8s
+kubectl get configmap start-k8s -o yaml
+
+
+echo Hello, world! >> index.html
+kubectl create configmap index-file --from-file index.html
+kubectl describe configmap index-file
+
+
+
+cat > multiple-keyvalue.env
+mykey1=myvalue1
+mykey2=myvalue2
+mykey3=myvalue3
+
+kubectl create configmap from-envfile --from-env-file multiple-keyvalue.env
+kubectl get cm from-envfile -o yaml
+
+---
+cat > k8s-mount-configmap.yaml 
+apiVersion: v1
+kind: Pod
+metadata:
+  name: configmap-volume-pod
+spec:
+  containers:
+  - name: my-container
+    image: busybox
+    args: [ "tail", "-f", "/dev/null" ]
+    volumeMounts:
+    - name: configmap-volume
+      mountPath: /etc/config
+  volumes:
+  - name: configmap-volume
+    configMap:
+      name: start-k8s
+---
+
+kubectl create -f k8s-mount-configmap.yaml 
+kubectl exec configmap-volume-pod -- ls /etc/config
+kubectl exec configmap-volume-pod -c my-container -- ls /etc/config
+kubectl exec configmap-volume-pod -- cat /etc/config/k8s
+kubectl exec configmap-volume-pod -- cat /etc/config/container
+
+kubectl exec -it configmap-volume-pod -- /bin/sh
+
+---
+cat > k8s-mount-configmap1.yaml 
+apiVersion: v1
+kind: Pod
+metadata:
+  name: configmap-volume-pod1
+spec:
+  containers:
+  - name: my-container
+    image: busybox
+    args: [ "tail", "-f", "/dev/null" ]
+    volumeMounts:
+    - name: configmap-volume
+      mountPath: /etc/config
+  volumes:
+  - name: configmap-volume
+    configMap:
+      name: start-k8s
+      items:
+      - key: k8s
+        path: k8s_fullname
+---
+*** 요것이 될지는 모르겠음
+kubectl create -f k8s-mount-configmap1.yaml 
+kubectl exec configmap-volume-pod1 -- ls /etc/config
+
+
+
+kubectl create configmap my-configmap --from-literal mykey=myvalue --dry-run -o yaml
+kubectl create configmap my-configmap --from-literal mykey=myvalue --dry-run -o yaml > my-configmap.yaml
+kubectl apply -f my-configmap.yaml
+
+
+
+====================================================================
+# Secret
+
+kubectl create secret generic my-password --from-literal password=1q2w3e4r
+echo mypassword > pw1 && echo yourpassword > pw2
+kubectl create secret generic our-password --from-file pw1 --from-file pw2
+
+
+kubectl describe secret my-password
+kubectl get secret my-password -o yaml
+ ...
+ password: MXEydzNlNHI
+ ...
+
+echo MXEydzNlNHI= | base64 -d
+
+
+
+#############################################
+## 시크릿 저장 키-값 포드 환경 변수로 가져오기
+---
+cat > selective-mount-secret.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: selective-volume-pod
+spec:
+  containers:
+  - name: my-container
+    image: busybox
+    args: [ "tail", "-f", "/dev/null" ]
+    volumeMounts:
+    - name: secret-volume
+      mountPath: /etc/secret
+  volumes:
+  - name: secret-volume
+    secret:
+      secretName: our-password
+      items:
+      - key: pw1
+        path: password1
+---
+
+kubectl apply -f selective-mount-secret.yaml
+kubectl exec selective-volume-pod -- ls /etc/secret
+kubectl exec selective-volume-pod -- cat /etc/secret/password1
+
+
+
+---
+cat > selective-mount-secret1.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: selective-volume-pod1
+spec:
+  containers:
+  - name: my-container
+    image: busybox
+    args: [ "tail", "-f", "/dev/null" ]
+    envFrom:
+    - secretRef:
+        name: our-password
+        key: pw2
+    
+---
+
+kubectl apply -f selective-mount-secret1.yaml
+kubectl exec selective-volume-pod1 -- env | grep password
+
+
+
+
+
+###############################################
+## docker-registry 타입의 시크릿 사용
+
+kubectl get secrets
+kubectl create secret generic my-password --from-literal password=1q2w3e4r
+
+
+### 사설 레지스트리 접근
+
+docker login
+
+kubectl create secret generic registry-auth --from-file=.dockerconfigjson=/root/.docker/config.json --type=kubernetes.io/dockerconfigjson
+
+kubectl create secret generic registry-auth --from-file=.dockerconfigjson=/home/lggusewan/.docker/config.json --type=kubernetes.io/dockerconfigjson
+---
+
+kubectl create secret docker-registry registry-auth-by-cmd \
+--docker-username=lgecloudairobotics \
+--docker-password=!xxxxxxxxxxx
+
+---
+
+kubectl get secrets
+
+
+
+
+
+
+#################################################
+## TLS 타입 시크릿 사용
+
+### TLS 키 저장
+
+openssl req -new -newkey rsa:4096 -days 365 -nodes -x509 -subj "/CN=example.com" -keyout cert.key -out cert.crt
+
+ls
+  cert.crt cert.key
+
+
+kubectl create secret tls my-tls-secret --cert cert.crt --key cert.key
+kubectl get secrets my-tls-secret
+
+kubectl get secrets my-tls-secret -o yaml
+
+kubectl create secret tls my-tls-secret --cert cert.crt --key cert.key --dry-run -o yaml
+
+
+
+
+
+-------------------------------------
+cat > kustomization.yaml
+
+secretGenerator:
+- name: kustomize-secret
+  type: kubernetes.io/tls
+  files:
+  - tls.crt=cert.crt
+  - tls.key=cert.key
+---
+
+
+kubectl kustomize ./
+
+kubectl apply -k ./
+kubectl delete -k ./
+
+
+--------------------------------------
+
+kubectl delete deployment --all
+kubectl delete pod --all
+
+kubectl delete configmap --all
+kubectl delete secret --all
+kubectl delete rs --all
+kubectl delete svc --all
+
+
+=========================================================================================
+# Ingress
+
+## install
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v0.46.0/deploy/static/provider/baremetal/deploy.yaml
+
+kubectl get svc -n ingress-nginx
+
+
+
+
+
+## Verify installation
+
+kubectl get pods -n ingress-nginx \
+  -l app.kubernetes.io/name=ingress-nginx --watch
+
+
+## Detect installed version
+
+POD_NAMESPACE=ingress-nginx
+POD_NAME=$(kubectl get pods -n $POD_NAMESPACE -l app.kubernetes.io/name=ingress-nginx --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}')
+
+kubectl exec -it $POD_NAME -n $POD_NAMESPACE -- /nginx-ingress-controller --version
+
+
+
+#########################################
+## 실습과제
+
+### 제공파일 수행
+
+kubectl create -f echo-hostname.yaml
+kubectl create -f internal-service.yaml
+kubectl create -f mandatory.yaml
+
+kubectl apply -f ingress.yaml
+kubectl apply -f ingress-svc-nodeport.yaml
+kubectl get svc --all-namespace
+
+hostname-service 의 cluster ip 10.103.11.34
+
+curl --resolve master.example.com:30000:10.103.11.34 master.example.com:30000/echo-hostname
+curl --resolve master.example.com:80:10.103.11.34 master.example.com:80/echo-hostname
+
+
+
+
+
+
+
+=======
+
+
+
+

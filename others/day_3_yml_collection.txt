@@ -1,0 +1,425 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: k8s-nodejs-pod
+  labels: 
+    app: hi-nodejs
+spec:
+  containers:
+  - name: nodejs-container
+    image: dbgurum/k8s-kor:nodejs_test_2
+    ports:
+    - containerPort: 8000
+
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: hi-nodejs-svc
+spec:
+  selector:
+    app: hi-nodejs
+  ports:
+    - port: 8899
+      targetPort: 8000
+  externalIPs:
+    - 192.168.36.66
+
+
+== gcp dashboard
+apiVersion: v1
+kind: Service
+metadata:
+  name: hi-nodejs-svc
+spec:
+  selector:
+    app: hi-nodejs
+  ports:
+    - port: 8899
+      targetPort: 8000
+  type: LoadBalancer
+
+
+
+========
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: k8s-nginx-pod
+  labels: 
+    app: hi-nginx
+spec:
+  containers:
+  - name: nginx-container
+    image: nginx:latest
+    ports:
+    - containerPort: 80
+
+------
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: hi-nginx-svc
+spec:
+  selector:
+    app: hi-nginx
+  ports:
+    - port: 80
+      targetPort: 80
+  externalIPs:
+    - 192.168.182.129
+
+-----
+apiVersion: v1
+kind: Service
+metadata:
+  name: hi-nginx-svc
+spec:
+  selector:
+    app: hi-nginx
+  ports:
+    - port: 80
+      targetPort: 80
+  type: LoadBalancer
+
+---
+
+$vi nodejs_test_pod.yml
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: k8s-apache-pod
+  labels: 
+    app: hi-apache
+spec:
+  containers:
+  - name: apache-container
+    image: nginx:latest
+    ports:
+    - containerPort: 80
+---
+
+vi nodejs_test_svc.yml
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hi-apache-svc
+spec:
+  selector:
+    app: hi-apache
+  ports:
+    - port: 80
+      targetPort: 80
+  externalIPs:
+    - 192.168.182.131
+
+
+==== in windows CMD for GCP
+
+$ mkdir nodejs_lab
+$ cd nodejs_lab
+$ notepad nodejs_lab.yaml
+
+----------
+apiVersion: v1
+kind: Pod
+metadata:
+  name: k8s-apache-pod
+  labels: 
+    app: hi-apache
+spec:
+  containers:
+  - name: apache-container
+    image: nginx:latest
+    ports:
+    - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hi-apache-svc
+spec:
+  selector:
+    app: hi-apache
+  ports:
+    - port: 80
+      targetPort: 80
+  type: LoadBalancer
+
+----------
+
+mongodb pod & svc: robo3T 이용을 위해
+------
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mongo-pod
+  labels:
+    app: hi-mongo
+spec:
+  containers:
+  - name: mongodb-container
+    image: mongo:latest
+    ports:
+    - containerPort: 27017
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo-svc
+spec:
+  selector:
+    app: hi-mongo
+  ports:
+    - port: 37017
+      targetPort: 27017
+  externalIPs:
+    - 192.168.20.137
+---------
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo-svc
+spec:
+  selector:
+    app: hi-mongo
+  ports:
+    - port: 37017
+      targetPort: 27017
+ type: LoadBalancer
+
+-------------------------------
+
+###
+apiVersion: v1
+kind: Pod
+metadata:
+  name: simple-echo
+spec:
+  containers:
+  - name: nginx
+    image: gihyodocker/nginx:latest
+    env:
+    - name: BACKEND_HOST
+      value: localhost:8080
+    ports:
+    - containerPort: 80
+  - name: echo
+    image: gihyodocker/echo:latest
+    ports:
+    - containerPort: 8080
+-------------------
+#### Pod 생성, 조회 in Dashboard 의 Exec
+$vi pod-1.yml
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-1
+spec:
+  containers:
+  - name: container1
+    image: kubetm/p8000
+    ports:
+    - containerPort: 8000
+  - name: container2
+    image: kubetm/p8080
+    ports:
+    - containerPort: 8080
+-------------
+$pod-2.yml
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-2
+spec:
+  containers:
+  - name: container1
+    image: kubetm/p8000
+    ports:
+    - containerPort: 8000
+  - name: container2
+    image: kubetm/p8080
+    ports:
+    - containerPort: 8080
+
+----------------------------------
+
+$kubectl logs pod/pod-2 -c container1
+$kubectl logs pod/pod-2 -c container2
+
+
+## Label
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: label-p1
+  labels:
+    type: prod
+    jobr: web
+spec:
+  containers:
+  - name: p1-container
+    image: kubetm/init
+---    
+apiVersion: v1
+kind: Pod
+metadata:
+  name: label-p2
+  labels:
+    type: prod
+    jobr: db
+spec:
+  containers:
+  - name: p2-container
+    image: kubetm/init
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: label-p3
+  labels:
+    type: prod
+    jobr: srv
+spec:
+  containers:
+  - name: p3-container
+    image: kubetm/init
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: label-p4
+  labels:
+    type: dev
+    jobr: web
+spec:
+  containers:
+  - name: p4-container
+    image: kubetm/init
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: label-p5
+  labels:
+    type: dev
+    jobr: db
+spec:
+  containers:
+  - name: p5-container
+    image: kubetm/init
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: label-p6
+  labels:
+    type: dev
+    jobr: srv
+spec:
+  containers:
+  - name: p6-container
+    image: kubetm/init
+------
+
+
+
+### service
+
+apiVersion: v1
+kind: Service
+metadata:  
+  name: front-web-svc
+spec:
+  selector:
+    jobr: srv  
+  ports:
+  - port: 8080
+--------------
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: prod-svc
+spec:
+  selector:
+    type: prod  
+  ports:
+  - port: 8080
+================
+
+
+kubernetes.io/hostname: k8s-node1
+kubernetes.io/hostname: k8s-node2
+
+Hostname: gke-k8s-cluster-swgu-default-pool-7e4c1de3-mlmm.asia-east2-c.c.second-base-252206.internal
+
+
+## scheduler
+```
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sch-pod
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: k8s-node2
+  containers:
+  - name: sch-container
+    image: kubetm/init
+```
+-- kubernetes.io/hostname: k8s-node2 는 dashboard node 에 들어가서 label 에서 확인할 것
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sch-pod2
+spec:
+  containers:
+  - name: sch2-container
+    image: kubetm/init
+    resources: 
+      requests:
+        memory: 2Gi
+      limits:
+        memory: 3Gi
+      
+---------------------
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sch-pod3
+spec:
+  containers:
+  - name: sch3-container
+    image: kubetm/init
+    resources: 
+      requests:
+        memory: 1Gi
+      limits:
+        memory: 1Gi
+
+-----------------
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sch-pod4
+spec:
+  containers:
+  - name: sch4-container
+    image: kubetm/init
+    resources: 
+      requests:
+        memory: 3Gi
+      limits:
+        memory: 3Gi

@@ -1,0 +1,753 @@
+# day 4 2020.02.21
+
+- GCP dashboard manual
+- https://kubernetes.io/ko/docs/tasks/access-application-cluster/web-ui-dashboard/
+- naver : blog.naver.com/ocmkorea
+
+
+
+[root@k8s-master ~]# cd /etc/kubernetes/manifests/
+[root@k8s-master manifests]# ls
+etcd.yaml  kube-apiserver.yaml  kube-controller-manager.yaml  kube-scheduler.yaml
+
+$kubectl get componentstatuses
+
+## node3 join
+
+- host를 하나 더 준비
+---
+[root@k8s-master ~]# hostnamectl set-hostname k8s-node3
+[root@k8s-master ~]# cat /etc/hostnme
+[root@k8s-master ~]# vi /etc/hosts
+  192.168.182.128 k8s-master
+  192.168.182.129 k8s-node1
+  192.168.182.131 k8s-node2
+  192.168.182.132 k8s-node3
+---
+
+
+
+[root@k8s-master ~]# cd /etc/kubernetes/manifests/
+[root@k8s-master manifests]# ls
+etcd.yaml  kube-apiserver.yaml  kube-controller-manager.yaml  kube-scheduler.yaml
+
+$kubectl get componentstatuses
+$
+
+
+## node3 join
+
+- host를 하나 더 준비
+
+[root@k8s-master ~]# hostnamectl set-hostname k8s-node3
+[root@k8s-master ~]# cat /etc/hostnme
+[root@k8s-master ~]# vi /etc/hosts
+  192.168.182.128 k8s-master
+  192.168.182.129 k8s-node1
+  192.168.182.131 k8s-node2
+  192.168.182.132 k8s-node3
+
+
+$ssh root@192.168.182.132
+
+[root@k8s-node3 ~]# echo '1' > /proc/sys/net/ipv4/ip_forward
+
+[root@k8s-master ~]# kubeadm token create --print-join-command
+[root@k8s-node3 ~]# kubeadm join 192.168.182.128:6443 --token 4m3b8l.c4chmkplz7ckti83     --discovery-token-ca-cert-hash sha256:20ae57dbcd2a3f2fbe5b8080d4d9538060feb18ac173dbbbce6bc8d1847829ad
+[root@k8s-master manifests]# kubectl describe node/k8s-node3
+
+[root@k8s-master ~]# kubectl get sa --all-namespaces  # sa (service account)
+[root@k8s-master ~]# kubectl api-resources --namespaced=true
+
+
+## [LAB] ClusterIp
+
+-----
+apiVersion: v1
+kind: Pod
+metadata:
+  name: clusterip-pod
+  labels:
+    app: cip-pod
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: k8s-node1
+  containers:
+  - name: container
+    image: kubetm/app
+    ports:
+    - containerPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clusterip-svc
+spec:
+  selector:
+    app: cip-pod
+  ports:
+  - port: 9000
+    targetPort: 8080
+-----------------
+
+[root@k8s-master ~]# kubectl get pod/clusterip-pod -o wide
+
+[root@k8s-master ~]# kubectl get svc
+
+[root@k8s-node1 ~]# curl 10.104.25.48:9000/hostname
+
+
+## LAB1) NodePort 를 이용한 트래픽 분산 효과
+
+-----
+apiVersion: v1
+kind: Pod
+metadata:
+  name: k8s-nodejs-pod-nodeport2
+  labels: 
+    app: hi-nodejs-nodeport2
+spec:
+  containers:
+  - name: nodejs-container-nodeport2
+    image: dbgurum/k8s-kor:nodejs_test2
+    ports:
+    - containerPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hi-nodejs-svc-nodeport2
+spec:
+  selector:
+    app: hi-nodejs-nodeport2
+  type: NodePort
+  ports:
+    - port: 8899
+      targetPort: 8000
+      nodePort: 30000
+------
+
+[root@k8s-master ~]# netstat -nlp | grep 30244
+tcp6       0      0 :::30244                :::*                    LISTEN      12733/kube-proxy
+
+[root@k8s-node1 ~]# netstat -nlp | grep 30244
+tcp6       0      0 :::30244                :::*                    LISTEN      4592/kube-proxy
+
+[root@k8s-node2 ~]# netstat -nlp | grep 30244
+tcp6       0      0 :::30244                :::*                    LISTEN      4574/kube-proxy
+
+[root@k8s-node3 ~]# netstat -nlp | grep 30244
+tcp6       0      0 :::30244                :::*                    LISTEN      11696/kube-proxy
+
+------
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hi-nodejs-svc-nodeport2
+spec:
+  selector:
+    app: hi-nodejs-nodeport2
+  type: NodePort
+  ports:
+    - port: 8899
+      targetPort: 8000
+      nodePort: 30000
+------
+
+$curl k8s-node1:30000
+$curl k8s-node2:30000
+$curl k8s-node3:30000
+======================
+
+## LAB2) NodePort 를 이용한 트래픽 분산 효과  
+
+pod 개 생성
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-1
+  labels: 
+    app: pod
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: k8s-node1
+  containers:
+  - name: container
+    image: kubetm/app
+    ports:
+    - containerPort: 8080
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-2
+  labels: 
+    app: pod
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: k8s-node2
+  containers:
+  - name: container
+    image: kubetm/app
+    ports:
+    - containerPort: 8080
+--------------
+
+service 생성
+-------
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-10
+spec:
+  selector:
+    app: pod
+  ports:
+  - port: 9000
+    targetPort: 8080
+    nodePort: 32568
+  type: NodePort
+------------------------
+
+## LAB 3) GCP 를 이용한 LoadBalancer
+--------------
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-3
+  labels: 
+    app: lb-pod
+spec:
+  containers:
+  - name: container
+    image: kubetm/app
+    ports:
+    - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lb-svc
+spec:
+  selector:
+    app: lb-pod
+  ports:
+  - port: 9000
+    targetPort: 8080
+  type: LoadBalancer
+----------------------------
+
+windows cmd 에서
+$ kubectl get svc
+
+외부에서
+$ curl 34.92.209.168:9000/hostname
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100    17    0    17    0     0    138      0 --:--:-- --:--:-- --:--:--   138Hostname : pod-3
+
+
+====================================
+============================
+
+
+## Volume share
+
+- 같은 Pod 내의 Container사이 : emptyDir
+- Host 와 container 사이 : HostPath
+- node 간 : Persistent Volume ( Host, AWS, .git, Storage(NFS, iSCSI) ... )
+             : 개발자는 Persistent Volume Claim 을 통해 활용
+
+- Disk추가
+fdisk
+mkfs ext4
+mkdir data
+/dev/sda 에 mount
+/etc/fstab 에 추가
+           
+
+1) Docker Volume
+  --volume=Host_Dir:container:Dir
+  docker volume create volume_name
+  --volume-from
+
+2) Kubernetes Volume
+  emptyDir
+  HostPath
+  PersistentVolume
+  PersistentVolumeClaim
+
+3) External Volume
+  NFS
+  iSCSI
+  AWS
+  Stoage
+  
+-------------------
+
+LAB#) Pod 내에 2개의 container가 volume share (emptyDir 활용)
+
+-----
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-volume1
+spec:
+  containers:
+  - name: container1
+    image: kubetm/init
+    volumeMounts:  
+    - name: empty-dir
+      mountPath: /mount1
+  - name: container2
+    image: kubetm/init
+    volumeMounts:  
+    - name: empty-dir
+      mountPath: /mount2
+  volumes:
+  - name: empty-dir
+    emptyDir: {}
+----------------------
+
+in container1
+mount | grep mount1
+cd /mount1
+echo "I love you" >> k8s.txt
+ls
+
+in container2
+mount | grep mount1
+cat k8s.txt
+
+container로 부터 host 로 가져오기
+[root@k8s-master ~]# kubectl pod-volume1:/mount1/k8s.txt -c container1 k8s.txt
+
+
+LAB#) Host(node)와 container가 volume share (HostPath 활용)
+
+-----
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-volume-2
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: k8s-node1
+  containers:
+  - name: container
+    image: kubetm/init
+    volumeMounts:  
+    - name: host-path
+      mountPath: /mount1
+  volumes:
+  - name: host-path
+    hostPath:
+      path: /data_dir
+      type: DirectoryOrCreate
+----------------------
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-volume-3
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: k8s-node1
+  containers:
+  - name: container
+    image: kubetm/init
+    volumeMounts:  
+    - name: host-path
+      mountPath: /mount2
+  volumes:
+  - name: host-path
+    hostPath:
+      path: /data_dir
+      type: DirectoryOrCreate
+-----------------------------------
+
+-- you can see whereever you create a file.
+
+[root@pod-volume-2 mount1]# ls
+k8s-2.txt  k8s-3.txt
+
+[root@pod-volume-3 mount2]# ls
+k8s-2.txt  k8s-3.txt
+
+[root@k8s-node1 data_dir]# ls
+k8s-2.txt  k8s-3.txt
+
+---------------------
+
+LAB#) Host(node1)와 Host(node2) 간 volume share (NFS 활용)
+
+----------------
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-volume-2
+spec:
+  containers:
+  - name: container
+    image: kubetm/init
+    volumeMounts:  
+    - name: host-path
+      mountPath: /mount1
+  volumes:
+  - name: host-path
+    hostPath:
+      path: /data_dir
+      type: DirectoryOrCreate
+---------------
+
+-- NFS [설정]
+[root@k8s-node2 ~]# mkdir /data_dir
+[root@k8s-node2 ~]# vi /etc/exports
+/data_dir *(rw,sync,all_squash,anonuid=2006,anongid=0)
+
+[root@k8s-node2 ~]# systemctl restart nfs
+[root@k8s-node2 ~]# exportfs -v
+/data_dir       <world>(sync,wdelay,hide,no_subtree_check,anonuid=2006,anongid=0,sec=sys,rw,secure,root_squash,all_squash)
+----------------------------------------------
+[root@k8s-node3 ~]# mkdir /data_dir
+
+[root@k8s-node3 ~]# vi /etc/fstab
+...
+k8s-node2:/data_dir     /data_dir                                  nfs     defaults        0 0
+
+[root@k8s-node3 ~]# mount /data_dir
+[root@k8s-node3 ~]# df -h
+
+[root@k8s-node3 ~]# mount
+...
+k8s-node2:/data_dir on /data_dir type nfs4 (rw,relatime,vers=4.1,rsize=524288,ws
+
+[확인]
+----------------------------------------------
+[root@k8s-node2 data_dir]# touch testfile.txt
+----------------------------------------------
+[root@k8s-node3 data_dir]# ls
+testfile.txt
+
+
+============================
+LAB#) External Storage의 volume share (Persistent Volume활용)
+
+-- pv1 : storage: 1G ReadWriteOnce
+-- pv2 : storage: 1G ReadOnlyMany
+-- pv3 : storage: 2G ReadWriteOnce
+
+----------
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv1
+spec:
+  capacity: 
+    storage: 1G
+  accessModes: 
+  - ReadWriteOnce
+  local: 
+    path: /data_dir
+  nodeAffinity: 
+    required: 
+      nodeSelectorTerms: 
+      - matchExpressions:
+        - {key: kubernetes.io/hostname, operator: In, values: [k8s-node1]}
+--------------------
+
+### PersistentVolumeClaim 작성
+
+-------------
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc1
+spec:
+  accessModes:
+  - ReadOnlyMany
+  resources: 
+    requests:
+      storage: 1G
+  storageClassName: ""
+----------------  
+    
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc1
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources: 
+    requests:
+      storage: 1G
+  storageClassName: ""
+--------------------------
+
+PVC 를 사용하는 Pod
+---------
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nodejs-pvc1-pod
+spec:
+  containers:
+  - name: nodejs-container
+    image: dbgurum/k8s-kor:nodejs-test2
+    ports:
+    - containerPort: 8000
+    volumeMounts:  
+    - name: testpath
+      mountPath: /mount1
+  volumes:
+  - name: testpath
+    persistentVolumeClaim:
+      claimName: pvc1
+------------
+
+
+### Namespace 생성
+
+-------
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: namespace1
+-------
+
+------
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-ns1
+  namespace: namespace1
+  labels:
+    app: pod
+spec:
+  containers:
+  - name: container
+    image: kubetm/app
+    ports:
+    - containerPort: 8080
+------------
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-ns1
+  namespace: namespace1
+spec:
+  selector: 
+    app: pod
+  ports:
+  - port: 9000
+    targetPort: 8080
+-------------------
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc10
+spec:
+  selector: 
+    app: pod
+  ports:
+  - port: 9000
+    targetPort: 8080
+    NodePort: 32568
+  type: NodePort
+-----------------
+
+### 다른 Namespace 내의 Pod 간의 Volume 공유
+
+-------
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-ns1
+  namespace: namespace1
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: k8s-node1
+  containers:
+  - name: container
+    image: kubetm/init
+    volumeMounts:  
+    - name: host-path
+      mountPath: /mount1
+  volumes:
+  - name: host-path
+    hostPath:
+      path: /shared_dir
+      type: DirectoryOrCreate
+--------
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-ns2
+  namespace: namespace2
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: k8s-node1
+  containers:
+  - name: container
+    image: kubetm/init
+    volumeMounts:  
+    - name: host-path
+      mountPath: /mount1
+  volumes:
+  - name: host-path
+    hostPath:
+      path: /shared_dir
+      type: DirectoryOrCreate
+---------
+
+kubectl get pod --all-namespace
+$kubectl get pod --namespace=namespace1
+$kubectl get sve --namespace=namespace1
+
+===============
+### 용량 설정 
+
+----------
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: rq1
+  namespace: namespace1
+spec:
+  hard:
+    requests.memory: 1Gi
+    limits.memory: 1Gi
+------
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: rq2
+  namespace: namespace2
+spec:
+  hard:
+    requests.memory: 2Gi
+    limits.memory: 2Gi
+------------
+
+[root@k8s-master ~]# kubectl describe resourcequotas --namespace=namespace1
+Name:            rq1
+Namespace:       namespace1
+Resource         Used  Hard
+--------         ----  ----
+limits.memory    0     1Gi
+requests.memory  0     1Gi
+
+
+[root@k8s-master ~]# kubectl describe resourcequotas --namespace=namespace2
+Name:            rq2
+Namespace:       namespace2
+Resource         Used  Hard
+--------         ----  ----
+limits.memory    0     2Gi
+requests.memory  0     2Gi
+
+-----------------------------------------
+
+Quotas 가 정해진 namespace에는 spec에 용량을 설정해야 함.
+-------
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod11
+spec:
+  containers:
+  - name: container
+    image: kubetm/app
+    resources:
+      requests: 
+        memory: 0.5Gi
+      limits:
+        memory: 0.5Gi
+-------  
+
+### namespace3 에 pod 개수 limit 설정
+---------
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: namespace3
+-------
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: rq3
+  namespace: namespace3
+spec:
+  hard:
+    pods: 2
+---------------------
+
+[root@k8s-master ~]# kubectl describe resourcequotas --namespace=namespace3
+Name:       rq3
+Namespace:  namespace3
+Resource    Used  Hard
+--------    ----  ----
+pods        0     2
+
+--Pod를 namespace3에 3개 이상 시도
+-------------
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-ns31
+  namespace: namespace3
+  labels:
+    app: pod
+spec:
+  containers:
+  - name: container
+    image: kubetm/app
+    ports:
+    - containerPort: 8080
+----------------
+
+### 자원소비제어: limitRange
+
+--------
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: limitr1
+  namespace: namespace2
+spec:
+  limits:
+  - type: Container
+    min: 
+      memory: 0.2Gi
+    max:
+      memory: 0.4Gi
+    maxLimitRequestsRatio:
+      memory: 3
+    defaultRequests: 
+      memory: 0.1Gi
+    default:
+      memory: 0.2Gi
+----------------
+
+[root@k8s-master ~]# kubectl describe limitranges --namespace=namespace2
+Name:       limitr1
+Namespace:  namespace2
+Type        Resource  Min            Max            Default Request  Default Limit  Max Limit/Request Ratio
+----        --------  ---            ---            ---------------  -------------  -----------------------
+Container   memory    214748364800m  429496729600m  214748364800m    214748364800m  -
+
+
+## Further Study
+
+Cronjob
+Deployments
+ReplicaSet
+StatefulSet
+ConfigMap
+

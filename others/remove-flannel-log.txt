@@ -1,0 +1,15 @@
+# Remove flannel log
+
+
+swever@k8s-master:~$ sudo kubectl delete -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+[sudo] password for swever: 
+podsecuritypolicy.policy "psp.flannel.unprivileged" deleted
+clusterrole.rbac.authorization.k8s.io "flannel" deleted
+clusterrolebinding.rbac.authorization.k8s.io "flannel" deleted
+serviceaccount "flannel" deleted
+configmap "kube-flannel-cfg" deleted
+daemonset.apps "kube-flannel-ds-amd64" deleted
+daemonset.apps "kube-flannel-ds-arm64" deleted
+daemonset.apps "kube-flannel-ds-arm" deleted
+daemonset.apps "kube-flannel-ds-ppc64le" deleted
+daemonset.apps "kube-flannel-ds-s390x" deleted

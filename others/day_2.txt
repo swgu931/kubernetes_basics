@@ -1,0 +1,108 @@
+# Day 2 (2020.2.19)
+
+$sudo service docker restart
+
+- ElasticSearch Head 를 크롬에 설치
+
+## 3-node ELK
+- Elastic 3 node + Kibana  1 node
+- elk_cluster
+- 주어진 docker-compose.yml 활용
+
+$curl -XGET localhost:9200/_cluster/health?pretty=true
+$curl -XGET localhost:9200/_cat/indices?v
+$curl -XGET localhost:9200/_cat/shards?v
+
+http://192.168.56.105:9200  #elasticsearch
+http://192.168.56.105:5601  #kibana
+   - Monitoring (turn on) > sample data 3개 활성화
+   - Dashboard 구경
+   - 크롬웹스토어에서 ElasticSearch Head 를 추가 후에 접속
+
+-- 데이터 입력 후 elasticsearch head 를보면 books DB 가 3노드에 분산복제되어 저장됨을 확인 가능
+$curl -XPUT http://localhost:9200/books/book/1 -H 'Content-Type: application/json' -d '
+{
+  "title" : "Elasticsearch cluster",
+  "author" : "Lee",
+  "date" : "2019-10-17",
+  "pages" : 300
+}'
+
+
+- 데이터베이스 내용도 지우고 싶다면  
+$docker-compose down --volume   
+- ref : https://www.44bits.io/ko/post/almost-perfect-development-environment-with-docker-and-docker-compose
+
+## docker in docker
+- /var/run/docker.sock 을 공유하면 가능
+
+## Docker Private Registry 구축
+
+$sudo vi /etc/init.d/docker
+---
+31   DOCKER_OPTS=--insecure-registry 192.168.56.105:5000
+---
+
+$sudo vi /etc/docker/daemon.json
+---
+{ "insecure-registries": ["192.168.56.105:5000"] }
+---
+
+$sudo service docker restart
+$docker version
+$docker info 로 확인 (아래)
+  Insecure Registries:
+   192.168.56.105:5000
+   127.0.0.0/8
+
+$mkdir priv_regi
+$docker run -d -e SETTINGS_FLAVOR=dev \
+-e STORAGE_PATH=/home/jeff/priv_regi \
+-v /opt/data/registry:/home/jeff/priv_regi \ 
+-p 5000:5000 \
+registry
+
+$sudo netstat -nlp | grep 5000
+
+$docker image tag swgu931/apache2:20.02 localhost:5000/mybuild:1.0
+$docker image tag google/cadvisor:latest localhost:5000/cadvisor:late
+$docker push localhost:5000/cadvisor
+$docker push localhost:5000/mybuild:1.0
+
+
+$curl -X GET http://localhost:5000/v2/_catalog
+
+
+### docker registry-web-ui 구성
+
+$curl -X GET http://localhost:5000/v2/mybuild/tags/list
+$docker search docker-registry-web
+$docker run -it -d -p 9090:8080 --name registry-web-ui \
+> --link confident_lalande \  ## confident_lalande : registry 의 container name
+> -e REGISTRY_URL=http://192.168.56.105:5000/v2 \
+> -e REGISTRY_NAM=192.168.56.105:5000 \
+> hyper/docker-registry-web
+
+$sudo netstat -nlp | grep 9090
+
+http://192.168.56.105:9090 으로 접속
+
+
+### Private Registry 를 이용한 webserver 구축
+- Kubernetes with Docker_summary.pdf 의 page38  참조
+
+## docker swarm mode cluster  docker in docker (dind)
+ref: https://github.com/swgu931/docker_edu/tree/master/docker_swarm
+
+
+$docker run --rm -v /var/run/docker.sock:/var/ru/docker.sock docker:latest docker ps
+
+
+$docker exec -it worker01 docker image pull registry:5000/google/cadvisor:latest
+$docker exec -it worker01 docker image ls
+$docker exec -it manager docker service create --replicas 1 --publish 8765:8080 --name cadvisor registry:5000/google/cadvisor:latest
+$docker exec -it manager docker service ls
+$docker inspect manager | grep IPAddress
+$docker exec -it manager docker service rm xxx
+$docker exec -it manager docker service ls
+

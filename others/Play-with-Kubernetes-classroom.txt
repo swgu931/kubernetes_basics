@@ -1,0 +1,308 @@
+# Play with Kubernetes classroom 
+# https://training.play-with-kubernetes.com/kubernetes-workshop/
+# https://github.com/dockersamples/dockercoins
+
+
+## Start the cluster
+  First step is to initialize the cluster in the first terminal:
+
+  kubeadm init --apiserver-advertise-address $(hostname -i)
+
+  kubeadm join --token a146c9.9421a0d62a0611f4 172.26.0.2:6443 --discovery-token-ca-cert-hash sha256:9a4dc07bd8ac596336ecee6ce0928b3500174037c07a38a03bebef25e97c4db5
+
+  kubectl apply -n kube-system -f \
+    "https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 |tr -d '\n')"
+
+
+  
+
+kubectl get no -o yaml
+
+kubectl get nodes -o json | jq ".items[] | {name:.metadata.name} + .status.capacity"
+
+kubectl explain <type>
+kubectl explain pod
+
+curl -k https://10.96.0.1
+ Try to connect to the API.
+ -k is used to skip certificate verification
+    Make sure to replace 10.96.0.1 with the CLUSTER-IP shown by $ kubectl get svc
+
+
+## Example 1
+
+kubectl run pingpong --image alpine ping 8.8.8.8
+
+kubectl get all
+
+kubectl logs deploy/pingpong
+
+kubectl logs deploy/pingpong --tail 1 --follow
+
+kubectl scale deploy/pingpong --replicas 8
+
+kubectl get pods -w
+
+*exit 이후 다시 접속시...
+kubectl exec -it <pod name> -- /bin/bash
+kubectl exec -it ros2-test-68bdcd6f6f-42x2j -- /bin/bash
+
+kubectl delete pod pingpong-yyyy
+
+  : kubectl run --restart=OnFailure or kubectl run --restart=Never
+  : With kubectl run --schedule=…, we can also create cronjobs
+
+kubectl logs -l run=pingpong --tail 1
+
+kubectl scale deploy/pingpong --replicas 3
+
+kubectl delete deploy/pingpong
+
+
+## Example 2
+
+kubectl run elastic --image=elasticsearch:2 --replicas=4
+
+kubectl get pods -w
+
+kubectl expose deploy/elastic --port 9200
+
+kubectl get svc
+
+swever@k8s-master:~$ kubectl get svc
+NAME         TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+elastic      ClusterIP   10.101.214.47   <none>        9200/TCP   8s
+kubernetes   ClusterIP   10.96.0.1       <none>        443/TCP    17h
+swever@k8s-master:~/test$ curl http://10.101.214.47:9200
+{
+  "name" : "Human Torch",
+  "cluster_name" : "elasticsearch",
+  "cluster_uuid" : "DapZajmtRLO7qmgu7w0ITw",
+  "version" : {
+    "number" : "2.4.6",
+    "build_hash" : "5376dca9f70f3abef96a77f4bb22720ace8240fd",
+    "build_timestamp" : "2017-07-18T12:17:44Z",
+    "build_snapshot" : false,
+    "lucene_version" : "5.5.4"
+  },
+  "tagline" : "You Know, for Search"
+}
+
+
+swever@k8s-master:~$ curl http://10.101.214.47
+curl: (7) Failed to connect to 10.101.214.47 port 80: No route to host
+
+
+*tip : Let’s obtain the IP address that was allocated for our service, programatically
+IP=$(kubectl get svc elastic -o go-template --template '{{ .spec.clusterIP }}')
+curl http://$IP:9200/
+
+
+
+kubectl delete deploy/elastic
+
+
+
+## Example 3 : Our app on Kube (build, ship, run)
+
+export USERNAME=DockerHub_YourUserName
+
+cd ~/dockercoins/stacks
+
+docker-compose -f dockercoins.yml build
+docker-compose -f dockercoins.yml push
+
+dockercoins.yml
+---------------------
+version: "3.2"
+
+services:
+  rng:
+    build: dockercoins/rng
+    image: ${USERNAME}/rng:${TAG-latest}
+    deploy:
+      mode: global
+
+  hasher:
+    build: dockercoins/hasher
+    image: ${USERNAME}/hasher:${TAG-latest}
+
+  webui:
+    build: dockercoins/webui
+    image: ${USERNAME}/webui:${TAG-latest}
+    ports:
+    - "8000:80"
+
+  redis:
+    image: redis
+
+  worker:
+    build: dockercoins/worker
+    image: ${USERNAME}/worker:${TAG-latest}
+    deploy:
+      replicas: 4
+----------------------------
+
+kubectl run redis --image=redis
+
+for SERVICE in hasher rng webui worker; do
+  kubectl run $SERVICE --image=$USERNAME/$SERVICE -l app=$SERVICE
+done
+
+
+kubectl logs deploy/rng
+kubectl logs deploy/worker
+
+
+*Exposing services internally
+
+kubectl expose deployment redis --port 6379
+kubectl expose deployment rng --port 80
+kubectl expose deployment hasher --port 80
+
+kubectl get svc
+
+kubectl logs deploy/worker --follow
+
+
+
+*Exposing services for external access
+
+kubectl create service nodeport webui --tcp=80 --node-port=30001
+
+kubectl get svc
+
+swever@k8s-master:~/git-source/dockercoins/stacks$ kubectl get svc
+NAME         TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)        AGE
+elastic      ClusterIP   10.101.214.47    <none>        9200/TCP       171m
+hasher       ClusterIP   10.100.242.217   <none>        80/TCP         7m29s
+kubernetes   ClusterIP   10.96.0.1        <none>        443/TCP        20h
+redis        ClusterIP   10.107.135.151   <none>        6379/TCP       8m46s
+rng          ClusterIP   10.108.148.164   <none>        80/TCP         7m54s
+webui        NodePort    10.111.76.233    <none>        80:30001/TCP   48s
+
+ : 모든 노드에서 브라우저로 접속 : http://10.111.76.233:80
+
+kubectl get pods
+
+kubectl get deployments
+
+kubectl scale deploy/worker --replicas=10
+ : webui 에서 변화 관찰 : Current mining speed (hashes/second) 가 증가함.
+
+
+ 
+## Daemon sets
+:Unfortunately, as of Kubernetes 1.9, the CLI cannot create daemon sets
+
+1) Creating the YAML file for our daemon set
+kubectl get deploy/rng -o yaml --export >rng.yml
+ Edit rng.yml
+ Note: --export will remove “cluster-specific” information, i.e.:
+  namespace (so that the resource is not tied to a specific namespace) status and creation timestamp (useless when creating a new resource)   
+  resourceVersion and uid (these would cause… interesting problems) 
+ 
+ Change kind: Deployment to kind: DaemonSet
+ remove the replicas field
+ remove the strategy field (which defines the rollout mechanism for a deployment)
+ remove the status: {} line at the end
+
+2) Use the --force, Luke
+kubectl apply -f rng.yml --validate=false
+
+kubectl get all
+
+kubectl get ds
+
+kubectl logs -l run=rng --tail 1
+
+
+3) Deep dive into selectors
+
+kubectl describe deploy rng
+
+kubectl describe rs rng-yyyy
+
+kubectl describe ds rng
+
+  : The replica set selector also has a pod-template-hash, unlike the pods in our daemon set.
+
+4) Updating a service through labels and selectors
+
+kubectl edit daemonset rng
+kubectl edit service rng
+
+kubectl logs -l run=rng
+
+kubectl get pods
+
+
+
+## Rolling updates
+
+cd stacks
+export TAG=v0.2
+docker-compose -f dockercoins.yml build
+docker-compose -f dockercoins.yml push
+
+kubectl get pods -w
+kubectl get replicasets -w
+kubectl get deployments -w
+ 
+kubectl set image deploy worker worker=$USERNAME/worker:$TAG
+kubectl rollout status deploy worker
+
+
+** Recovering from a bad rollout
+kubectl rollout undo deploy worker
+kubectl rollout status deploy worker
+
+ 
+## Changing rollout parameters
+
+---
+spec:
+  template:
+    spec:
+      containers:
+      - name: worker
+        image: $USERNAME/worker:latest
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 3
+  minReadySeconds: 10
+---
+
+## Applying changes through a YAML patch
+
+- We could use kubectl edit deployment worker
+- But we could also use kubectl patch with the exact YAML shown before
+- Apply all our changes and wait for them to take effect:
+---
+kubectl patch deployment worker -p "
+spec:
+  template:
+    spec:
+      containers:
+      - name: worker
+        image: $USERNAME/worker:latest
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 3
+  minReadySeconds: 10
+"
+kubectl rollout status deployment worker
+---
+
+
+
+
+
+
+
+
+
+
+

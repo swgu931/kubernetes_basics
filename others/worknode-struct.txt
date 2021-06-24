@@ -1,0 +1,81 @@
+sewan.gu@wsstation:/var/lib$ sudo tree ./kubelet/
+./kubelet/
+├── config.yaml
+├── cpu_manager_state
+├── device-plugins
+│   ├── DEPRECATION
+│   ├── kubelet.sock
+│   └── kubelet_internal_checkpoint
+├── kubeadm-flags.env
+├── pki
+│   ├── kubelet-client-2020-03-16-10-25-57.pem
+│   ├── kubelet-client-current.pem -> /var/lib/kubelet/pki/kubelet-client-2020-03-16-10-25-57.pem
+│   ├── kubelet.crt
+│   └── kubelet.key
+├── plugins
+├── plugins_registry
+├── pod-resources
+│   └── kubelet.sock
+└── pods
+    ├── 15671716-10b4-4ff6-b58a-67b6385bfb34
+    │   ├── containers
+    │   │   └── kube-proxy
+    │   │       └── a883c018
+    │   ├── etc-hosts
+    │   ├── plugins
+    │   │   └── kubernetes.io~empty-dir
+    │   │       ├── wrapped_kube-proxy
+    │   │       │   └── ready
+    │   │       └── wrapped_kube-proxy-token-74xm5
+    │   │           └── ready
+    │   └── volumes
+    │       ├── kubernetes.io~configmap
+    │       │   └── kube-proxy
+    │       │       ├── config.conf -> ..data/config.conf
+    │       │       └── kubeconfig.conf -> ..data/kubeconfig.conf
+    │       └── kubernetes.io~secret
+    │           └── kube-proxy-token-74xm5
+    │               ├── ca.crt -> ..data/ca.crt
+    │               ├── namespace -> ..data/namespace
+    │               └── token -> ..data/token
+    └── df4a64ae-08e3-4f98-9106-a6e8f15fa03e
+        ├── containers
+        │   ├── install-cni
+        │   │   └── f2a93637
+        │   └── kube-flannel
+        │       └── 428355dc
+        ├── etc-hosts
+        ├── plugins
+        │   └── kubernetes.io~empty-dir
+        │       ├── wrapped_flannel-cfg
+        │       │   └── ready
+        │       └── wrapped_flannel-token-bvclc
+        │           └── ready
+        └── volumes
+            ├── kubernetes.io~configmap
+            │   └── flannel-cfg
+            │       ├── cni-conf.json -> ..data/cni-conf.json
+            │       └── net-conf.json -> ..data/net-conf.json
+            └── kubernetes.io~secret
+                └── flannel-token-bvclc
+                    ├── ca.crt -> ..data/ca.crt
+                    ├── namespace -> ..data/namespace
+                    └── token -> ..data/token
+
+31 directories, 30 files
+
+
+
+sewan.gu@wsstation:~$ sudo tree /etc/kubernetes/
+/etc/kubernetes/
+├── kubelet.conf
+├── manifests
+└── pki
+    └── ca.crt
+
+2 directories, 2 files
+
+
+
+
+

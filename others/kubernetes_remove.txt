@@ -1,0 +1,67 @@
+# Kubernetes remove 방법
+
+```
+sudo kubeadm reset
+dpkg --list | grep kube
+sudo apt-get purge -y kubeadm kubectl kubelet kubernetes-cni
+dpkg --list | grep kube
+sudo rm -rf /etc/kubernetes
+sudo rm -rf $HOME/.kube
+sudo rm -rf /var/lib/etcd
+sudo rm -rf /usr/local/bin/kubectl
+sudo rm -rf /usr/bin/kubectl
+sudo rm -rf /usr/local/bin/kubeadm
+sudo rm -rf /usr/bin/kubeadm
+sudo rm -rf /usr/local/bin/kubelet
+sudo rm -rf /usr/bin/kubelet
+sudo rm -rf /var/lib/kubelet
+```
+
+### 아래는 경우에 따라서 확인 : Google Cloud SDK 제거
+
+$ sudo rm -rf $HOME/install/google-cloud-sdk
+
+$ sudo rm -rf $HOME/.config/gcloud
+
+
+------------------------------------
+# Google Cloud SDK 제거 확인
+https://cloud.google.com/sdk/docs/uninstall-cloud-sdk
+
+
+Cloud SDK를 완전히 삭제하려면 다음 안내를 따르세요.
+다음을 실행하여 설치 디렉토리를 찾습니다.
+
+$ gcloud info --format='value(installation.sdk_root)'
+
+다음을 실행하여 구성 디렉토리를 찾습니다(MacOS 및 Linux의 경우 일반적으로 ~/.config/gcloud).
+
+$ gcloud info --format='value(config.paths.global_config_dir)'
+
+ 두 디렉토리를 모두 삭제합니다.
+
+- 또한 .bashrc 또는 이에 해당하는 셸 초기화 파일에서 completion.bash.inc 및 paths.bash.inc가 있는 줄을 삭제합니다(설치 중에 추가한 경우).
+--------------------------------------------
+
+
+** 네트워크 (DNS) 문제로 ContainerCreating 에 멈춘 경우 **
+
+출처: https://crystalcube.co.kr/202 [유리상자 속 이야기]
+
+
+# kubeadm reset
+# systemctl stop kubelet
+# systemctl stop docker
+# rm -rf /var/lib/cni/
+# rm -rf /var/lib/kubelet/*
+# rm -rf /etc/cni/
+# ifconfig cni0 down
+# brctl delbr cni0
+# ifconfig flannel.1 down
+# ifconfig docker0 down
+# ip link delete cni0
+# ip link delete flannel.1
+# systemctl start docker
+
+# ip link delete cni0
+# ip link delete flannel.1

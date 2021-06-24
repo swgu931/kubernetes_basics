@@ -1,0 +1,174 @@
+swever@k8s-master:/etc$ sudo tree /var/lib/kubelet/
+/var/lib/kubelet/
+├── config.yaml
+├── cpu_manager_state
+├── device-plugins
+│   ├── DEPRECATION
+│   ├── kubelet_internal_checkpoint
+│   └── kubelet.sock
+├── kubeadm-flags.env
+├── pki
+│   ├── kubelet-client-2020-03-16-09-17-23.pem
+│   ├── kubelet-client-current.pem -> /var/lib/kubelet/pki/kubelet-client-2020-03-16-09-17-23.pem
+│   ├── kubelet.crt
+│   └── kubelet.key
+├── plugins
+├── plugins_registry
+├── pod-resources
+│   └── kubelet.sock
+└── pods
+    ├── 033665b8-d6e6-42e1-bc53-8e9ab689a5da
+    │   ├── containers
+    │   │   └── kube-proxy
+    │   │       └── ddd832c7
+    │   ├── etc-hosts
+    │   ├── plugins
+    │   │   └── kubernetes.io~empty-dir
+    │   │       ├── wrapped_kube-proxy
+    │   │       │   └── ready
+    │   │       └── wrapped_kube-proxy-token-74xm5
+    │   │           └── ready
+    │   └── volumes
+    │       ├── kubernetes.io~configmap
+    │       │   └── kube-proxy
+    │       │       ├── config.conf -> ..data/config.conf
+    │       │       └── kubeconfig.conf -> ..data/kubeconfig.conf
+    │       └── kubernetes.io~secret
+    │           └── kube-proxy-token-74xm5
+    │               ├── ca.crt -> ..data/ca.crt
+    │               ├── namespace -> ..data/namespace
+    │               └── token -> ..data/token
+    ├── 61aace41e5e231c914a0c76ce066b716
+    │   ├── containers
+    │   │   └── etcd
+    │   │       └── 09f0ce21
+    │   ├── etc-hosts
+    │   ├── plugins
+    │   └── volumes
+    ├── 8a279e9a-1783-42ae-ba72-d2393493833b
+    │   ├── containers
+    │   │   └── coredns
+    │   │       └── 382c38fb
+    │   ├── etc-hosts
+    │   ├── plugins
+    │   │   └── kubernetes.io~empty-dir
+    │   │       ├── wrapped_config-volume
+    │   │       │   └── ready
+    │   │       └── wrapped_coredns-token-z8tx9
+    │   │           └── ready
+    │   └── volumes
+    │       ├── kubernetes.io~configmap
+    │       │   └── config-volume
+    │       │       └── Corefile -> ..data/Corefile
+    │       └── kubernetes.io~secret
+    │           └── coredns-token-z8tx9
+    │               ├── ca.crt -> ..data/ca.crt
+    │               ├── namespace -> ..data/namespace
+    │               └── token -> ..data/token
+    ├── b18e678e-5906-46e6-9377-a4e6d62438f7
+    │   ├── containers
+    │   │   ├── install-cni
+    │   │   │   └── 6e8b7e54
+    │   │   └── kube-flannel
+    │   │       └── 2fa1a230
+    │   ├── etc-hosts
+    │   ├── plugins
+    │   │   └── kubernetes.io~empty-dir
+    │   │       ├── wrapped_flannel-cfg
+    │   │       │   └── ready
+    │   │       └── wrapped_flannel-token-bvclc
+    │   │           └── ready
+    │   └── volumes
+    │       ├── kubernetes.io~configmap
+    │       │   └── flannel-cfg
+    │       │       ├── cni-conf.json -> ..data/cni-conf.json
+    │       │       └── net-conf.json -> ..data/net-conf.json
+    │       └── kubernetes.io~secret
+    │           └── flannel-token-bvclc
+    │               ├── ca.crt -> ..data/ca.crt
+    │               ├── namespace -> ..data/namespace
+    │               └── token -> ..data/token
+    ├── b704a76530b0639381520f958f444182
+    │   ├── containers
+    │   │   └── kube-controller-manager
+    │   │       └── 19927e84
+    │   ├── etc-hosts
+    │   ├── plugins
+    │   └── volumes
+    ├── b8459572-b06a-4a64-94c8-1524cdf48489
+    │   ├── containers
+    │   │   └── coredns
+    │   │       └── 5c8a6398
+    │   ├── etc-hosts
+    │   ├── plugins
+    │   │   └── kubernetes.io~empty-dir
+    │   │       ├── wrapped_config-volume
+    │   │       │   └── ready
+    │   │       └── wrapped_coredns-token-z8tx9
+    │   │           └── ready
+    │   └── volumes
+    │       ├── kubernetes.io~configmap
+    │       │   └── config-volume
+    │       │       └── Corefile -> ..data/Corefile
+    │       └── kubernetes.io~secret
+    │           └── coredns-token-z8tx9
+    │               ├── ca.crt -> ..data/ca.crt
+    │               ├── namespace -> ..data/namespace
+    │               └── token -> ..data/token
+    ├── d2b6851ad5aec67e4fb526553021413c
+    │   ├── containers
+    │   │   └── kube-apiserver
+    │   │       └── 2ad3bdab
+    │   ├── etc-hosts
+    │   ├── plugins
+    │   └── volumes
+    └── d4d13becd444ee4a984c5c68b2a69ffd
+        ├── containers
+        │   └── kube-scheduler
+        │       └── c9e2d1d2
+        ├── etc-hosts
+        ├── plugins
+        └── volumes
+
+75 directories, 54 files
+swever@k8s-master:/etc$ sudo tree /etc/kubernetes/
+/etc/kubernetes/
+├── admin.conf
+├── controller-manager.conf
+├── kubelet.conf
+├── manifests
+│   ├── etcd.yaml
+│   ├── kube-apiserver.yaml
+│   ├── kube-controller-manager.yaml
+│   └── kube-scheduler.yaml
+├── pki
+│   ├── apiserver.crt
+│   ├── apiserver-etcd-client.crt
+│   ├── apiserver-etcd-client.key
+│   ├── apiserver.key
+│   ├── apiserver-kubelet-client.crt
+│   ├── apiserver-kubelet-client.key
+│   ├── ca.crt
+│   ├── ca.key
+│   ├── etcd
+│   │   ├── ca.crt
+│   │   ├── ca.key
+│   │   ├── healthcheck-client.crt
+│   │   ├── healthcheck-client.key
+│   │   ├── peer.crt
+│   │   ├── peer.key
+│   │   ├── server.crt
+│   │   └── server.key
+│   ├── front-proxy-ca.crt
+│   ├── front-proxy-ca.key
+│   ├── front-proxy-client.crt
+│   ├── front-proxy-client.key
+│   ├── sa.key
+│   └── sa.pub
+├── sa_deploy
+│   ├── dashboard-adminuser.yaml
+│   └── dashboard_rbac.yaml
+└── scheduler.conf
+
+4 directories, 32 files
+

@@ -1,0 +1,226 @@
+# Day 1 : 2020. 2. 18
+
+http://naver.me/5J3bGxIl 
+pwd: docker
+
+
+## cAdvisor 사용법 (Cantainer Advisor)
+
+```
+$docker run \
+--volume=/:/rootfs:ro \
+--volume=/var/run:/var/run:rw \
+--volume=/sys:/sys:ro \
+--volume=/var/lib/docker/:/var/lib/docker:ro \
+--publish=8282:8080 \
+--detach=true \
+--name=cadvisor \
+google/cadvisor:latest    
+```
+
+활용
+access 방법: http://hostip:8282
+
+
+## commit & push 방법
+
+```
+$docker run -it --name mywebservr -p 82:80 ubuntu:14.04 bash
+ #apt-get update
+ #apt-get install apache2 -y
+ #service apache2 start
+ #[CTRL+P,Q]
+ 
+$docker container commit mywebserver ubuntu14/apache2:1.0
+$docker image tag ubuntu14/apache2:1.0 swgu931/apache2:20.02
+$docker login
+$docker push swgu931/apache2:20.02
+```
+
+https://db-engines.com/en/ranking
+
+mongoDB  : Robo 3T 로 붙여서 원격 관리 
+
+
+
+## Docker ex 11 jupyter notebook
+docker run -p 8888:8888 -v /data:/notebooks -it dbgurum/ml-jupyternotebook:5.1.0
+
+
+
+## Docker ex 12  node.js
+
+$vi nodejs_test.js
+```
+var http = require('http');
+var content = function(req,resp) {
+  resp.end("Welcome to Kubernetes~!" + "\n");
+  resp.writeHead(200);
+}
+var w = http.createServer(content);
+w.listen(8000);
+```
+
+$docker pull node
+$docker run -d -it -p 9000:8000 --name=nodejs_test2 node:latest
+$docker cp nodejs_test.js nodejs_test2:/nodejs_test.js
+$docker exec -it nodejs_test /bin/bash
+ #node nodejs_test.js
+ 
+192.168.56.105:9000 으로 접속
+------------------
+
+
+## Multi Container Application
+
+$docker run -d --name wordpressdb -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=wordpress mysql:5.7
+$docker run -d -e WORDPRESS_DB_PASSWORD=password --name wordpress --link wordpressdb:mysql -p 80 wordpress
+$docker ps
+$docker port wordpress
+ -- 브라우저로 접근 192.168.56.105:32768
+ 
+$docker exec -it wordpressdb bash
+
+---------------
+
+## Multi Container Application 에서 볼륨 공유 (--volume-from  활용)
+
+Terminal1:
+---
+$docker run -it --name data_share -v /home/jeff/data_dir:/data_dir ubuntu /bin/bash
+ #ls 
+   data_dir
+ #cd data_dir
+ #touch volume_share
+---
+
+Terminal2, 3, 4:
+---
+$docker run -it --name data_share_c_A --volumes-from data_share ubuntu /bin/bash
+
+$docker run -it --name data_share_c_B --volumes-from data_share ubuntu /bin/bash
+
+$docker run -it --name data_share_c_C --volumes-from data_share ubuntu /bin/bash
+---
+
+## Multi Container Application : guestbook
+
+### mongodb container 생성
+$docker network create devapp-net
+$docker run -d --name=mongodb --network=devapp-net -p 37017:27017 mongo:4
+$docker ps
+$docker logs mongodb
+
+
+### backend container 생성
+$docker run -d --name=backend --network=devapp-net -e PORT=8000 -e GUESTBOOK_DB_ADDR=mongodb:27017 dbgurum/doc-kor:devbackend_v1
+$docker logs backend
+
+### frontend container 생성
+$docker run -d --name=frontend -p 3000:8000 --network=devapp-net -e PORT=8000 -e GUESTBOOK_API_ADDR=backend:8000 dbgurum/doc-kor:devfrontend_v1
+$docker logs frontend
+
+$docker ps
+
+http://192.168.56.105:3000 으로 확인
+------------------
+
+## docker-compose 를 이용한 Multi Container Application
+
+### docker-compose install
+  apt-get install docker-compose 로 하지 말것.
+$sudo curl -L https://github.com/docker/compose/releases/download/1.21.0/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose
+$sudo chmod +x /usr/local/bin/docker-compose
+$sudo chown jeff /usr/local/bin/docker-compose
+$docker-compose -v
+ 
+Command
+ $docker-compose up -d
+ $docker-compose logs
+ $docker-compose ps
+ $docker-compose down
+
+$mkdir my_wp
+$cd my_wp
+my_wp$vi docker-compose.yml
+-----
+version: '2'
+services:
+  db:
+    image: mysql:5.7
+    volumes:
+      - ./mysql:/var/lib/mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: wordpress
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wordpress
+      MYSQL_PASSWORD: wordpress
+  wordpress:
+    image: wordpress:latest
+    volumes:
+      - ./wp:/var/www/html
+    ports:
+      - "8000:80"
+    restart: always
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_PASSWORD: wordpress
+------
+
+## APM (Apache PHP MariaDB) 
+
+----
+version: '3.0'
+services:
+  db:
+    image: mariadb
+    ports:
+      - "8889:3306"
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: database
+      MYSQL_USER: admin
+      MYSQL_PASSWORD: test
+    volumes:
+      - "./mysql:/var/lib/mysql"
+  web:
+    image: tutum/apache-php
+    ports:
+      - "89:89"
+    environment:
+      - ALLOW_OVERRIDE=true
+    restart: always
+    volumes:
+      - "./app:/app"
+    links:
+      - db
+-----
+
+## ELK (Elastic Logstash Kibana
+
+$sudo sysctl -w vm.max_map_count=262144
+$sudo service docker restart
+
+$sudo apt-get update
+$sudo apt-get install openjdk-8-jdk
+$java -version
+
+$mkdir elk
+$cd elk
+~elk$vi docker-compose.yml
+
+---------
+version: '3.3'
+services:
+  elk:
+    image: sebp/elk:671
+    ports:
+      - "5601:5601"    # kibana
+      - "9200:9200"    # elasticsearch
+      - "5044:5044"    # logstash
+    restart: always
+    environment:
+      - ES_JAVA_OPTS=-Xmx1g -Xms1g
+-----

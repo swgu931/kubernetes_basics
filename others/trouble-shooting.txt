@@ -1,0 +1,22 @@
+# Trouble-shooting
+
+** Back-off restarting failed container - Error syncing pod in Minikube
+https://serverfault.com/questions/924243/back-off-restarting-failed-container-error-syncing-pod-in-minikube
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ubuntu
+spec:
+  containers:
+  - name: ubuntu
+    image: ubuntu
+    command: [ "/bin/bash", "-ce", "tail -f /dev/null" ]
+---
+
+
+** How can I keep a container running on Kubernetes?
+https://stackoverflow.com/questions/31870222/how-can-i-keep-a-container-running-on-kubernetes
+---
+
+---

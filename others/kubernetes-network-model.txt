@@ -1,0 +1,174 @@
+# Kubernetes Network Model
+
+- A Guide to the Kubernetes Networking Model
+https://sookocheff.com/post/kubernetes/understanding-kubernetes-networking-model
+- How To Inspect Kubernetes Networking
+https://www.digitalocean.com/community/tutorials/how-to-inspect-kubernetes-networking
+- Container Network Interface Specification
+https://github.com/containernetworking/cni/blob/master/SPEC.md#network-configuration
+
+-리눅스는 모든 프로세스를 root network namespace 로 assign 함.
+-한개이상 컨테이너로 구성된 포드는 포드별 Namespace 를 갖고 있음.
+-root namespace 의 veth 와 각 pod의 eth0가 assocation 되어있음.
+-node 내부 pod 들 끼리의 통신은 root namespace 에 있는 브리지를 통해 수행함.
+-다른 node 의 pod 사이 통신은 node 가 이미 CIDR block 을 할당 받았으므로 이를 통해서 함.
+  ----------------------------------
+1) The packet begins by being sent through Pod 1’s Ethernet device which is paired with the virtual Ethernet device 
+   in the root namespace (1). 
+2) Ultimately, the packet ends up at the root namespace’s network bridge (2). 
+3) ARP will fail at the bridge because there is no device connected to the bridge with the correct MAC address for the packet. 
+   On failure, the bridge sends the packet out the default route — the root namespace’s eth0 device. 
+   At this point the route leaves the Node and enters the network (3). 
+4) We assume for now that the network can route the packet to the correct Node based on the CIDR block assigned to the Node (4). 
+5) The packet enters the root namespace of the destination Node (eth0 on VM 2),
+   where it is routed through the bridge to the correct virtual Ethernet device (5). 
+6) Finally, the route completes by flowing through the virtual Ethernet device’s pair residing within Pod 4’s namespace (6).
+   Generally speaking, each Node knows how to deliver packets to Pods that are running within it. 
+   Once a packet reaches a destination Node, packets flow the same way they do for routing traffic between Pods on the same Node.
+  ----------------------------------
+ 
+-container 사이 연결을 위해 CNI (Container Networking Interface) 를 활용
+ : flannel, Calico 등등 plugin
+
+-cluster 내의 node 는 Master node 부터 CIDR 10.244.0.0/24, 10.244.1.0/24, 10.244.2.0/24 을 갖으며,
+  각 노드에 생성되는 pod 에는 이 기준으로 Pod IP 를 생성함.
+-kube-system namespace 내의 Workload인 Pod는 kube-apiserver, kube-proxy, kube-controller, kube-scheduler, etcd 이며, 
+  master node 의 host IP 를 할당받음. CNI plugin 인 flannel 도 host ip 를 할당받음. 
+  (my example : 192.168.1.2)
+-kube-system namespace 내의 Service에 kube-dns가 있으며,Resource information 은 다음과 같음.
+  Type:ClusterIP, Cluster IP: 10.96.0.10, Session Affinity: None, Selector: k8s-app: kube-dns
+  .End Points 로는 10.244.0.8, 10.244.0.9 를 갖고 있으며, coredns 의 ip 임, coredns 는 ReplicaSets 임.
+
+-kube-system namespace 내에 있으나 10.244.0.x 를 할당받는 것은 CNI plugin시에 deploy되는 Coredns 뿐
+  coredns 는 Deployments 로 인스톨된 ReplicaSets 종류임.
+
+-default namespace내에 Service 로 Kubernetes가 있으며,Resource information 은 다음과 같음.
+  Type : ClusterIP, Cluster IP : 10.96.0.1, Session Affinity : None, Selector 가 없음.
+  .End Points 의 Host IP 는 master node host ip 와 동일함. Ports (Name, Port, Protocol) 는 https,6443,TCP 임.
+    (유일하며, 기타 Service 는 다른 Pod 의 ip를 End Point로 서비스함, 즉 10.244.x.x)
+
+
+** 전체 Network connection 확인 **
+sudo apt-get install iptraf-ng
+
+
+$ iptables -L -vx | gressgraph > iptables.twopi
+$ twopi -Tsvg iptables.twopi > iptables.svg
+
+
+$route
+$ip route
+$netstat -r
+
+$sudo iptables -L
+$docker network ls
+$brctl show
+$netstat -nlp | grep <wanted_port>
+$ps -ef | grep docker-proxy
+
+
+-docker ip address 확인
+  $docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' container_name_or_id
+  $docker inspect --format '{{ .NetworkSettings.IPAddress }}' container_name_or_id
+
+
+
+== https://www.digitalocean.com/community/tutorials/how-to-inspect-kubernetes-networking 요약 ==
+
+** Finding and Entering Pod Network Namespaces **
+
+$docker ps
+$docker inspect --format '{{ .State.Pid }}' container-id-or-name
+swever@k8s-master:~$ docker inspect --format '{{ .State.Pid }}' d041ec3ee515
+20999
+
+** Finding a Pod’s Virtual Ethernet Interface **
+
+$ sudo nsenter -t <Pid> -n ip addr
+swever@k8s-master:~$ sudo nsenter -t 20999 -n ip addr
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+3: eth0@if81: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1450 qdisc noqueue state UP group default 
+    link/ether 1e:32:a2:94:c5:b3 brd ff:ff:ff:ff:ff:ff link-netnsid 0
+    inet 10.244.0.12/24 scope global eth0
+       valid_lft forever preferred_lft forever
+swever@k8s-master:~$ ip addr
+81: veth9d5e266c@if3: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1450 qdisc noqueue master cni0 state UP group default 
+    link/ether b6:80:98:67:ca:45 brd ff:ff:ff:ff:ff:ff link-netnsid 7
+    inet6 fe80::b480:98ff:fe67:ca45/64 scope link 
+       valid_lft forever preferred_lft forever
+
+$ sudo nsenter -t <your-container-pid> -n <command>
+   <command> : container에서 exec 를 할 명령어
+
+
+** Inspecting Conntrack Connection Tracking **
+
+$sudo conntrack -L
+$sudo conntrack -E
+
+swever@k8s-master:~$ sudo conntrack -L -d 192.168.1.5
+
+$sysctl net.netfilter.nf_conntrack_max
+$sysctl -w net.netfilter.nf_conntrack_max=198000
+$vi /etc/sysctl.conf
+  . . .
+  net.ipv4.netfilter.ip_conntrack_max = 198000
+
+
+** Inspecting Iptables Rules **
+$ sudo iptables-save
+swever@k8s-master:~$ sudo iptables-save > output_iptable.txt
+swever@k8s-master:~$ sudo iptables -t nat -L KUBE-SERVICES
+
+[nsenter(namespace senter)]
+$ sudo nsenter -t <taget PID> -n <명령어>
+$ sudo nsenter -t 15652 -n netstat
+swever@k8s-master:~$ sudo nsenter -t 20999 -n dig kubernetes.default.svc.cluster.local @10.96.0.10
+
+
+
+** Querying Cluster DNS **
+$apt install dnsutils
+$kubectl get service -n kube-system kube-dns
+
+swever@k8s-master:~$ kubectl get service -n kube-system kube-dns
+NAME       TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)                  AGE
+kube-dns   ClusterIP   10.96.0.10   <none>        53/UDP,53/TCP,9153/TCP   12d
+swever@k8s-master:~$ kubectl get service -o wide --all-namespaces
+NAMESPACE              NAME                        TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)                      AGE    SELECTOR
+default                echo                        ClusterIP   10.106.212.82   <none>        80/TCP                       5d5h   app=echo,release=summer
+default                kubernetes                  ClusterIP   10.96.0.1       <none>        443/TCP                      12d    <none>
+ingress-nginx          ingress-nginx               NodePort    10.97.42.166    <none>        80:30071/TCP,443:31001/TCP   8d     app.kubernetes.io/name=ingress-nginx,app.kubernetes.io/part-of=ingress-nginx
+kube-system            kube-dns                    ClusterIP   10.96.0.10      <none>        53/UDP,53/TCP,9153/TCP       12d    k8s-app=kube-dns
+kubernetes-dashboard   dashboard-metrics-scraper   ClusterIP   10.99.170.149   <none>        8000/TCP                     11d    k8s-app=dashboard-metrics-scraper
+kubernetes-dashboard   kubernetes-dashboard        ClusterIP   10.106.164.67   <none>        443/TCP                      11d    k8s-app=kubernetes-dashboard
+
+swever@k8s-master:~$ sudo nsenter -t 20999 -n dig kubernetes.default.svc.cluster.local @10.96.0.10
+[sudo] password for swever: 
+
+; <<>> DiG 9.11.3-1ubuntu1.11-Ubuntu <<>> kubernetes.default.svc.cluster.local @10.96.0.10
+;; global options: +cmd
+;; Got answer:
+;; WARNING: .local is reserved for Multicast DNS
+;; You are currently testing what happens when an mDNS query is leaked to DNS
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 65219
+;; flags: qr aa rd; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
+;; WARNING: recursion requested but not available
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 4096
+; COOKIE: cbdd94381cc13ebb (echoed)
+;; QUESTION SECTION:
+;kubernetes.default.svc.cluster.local. IN A
+
+;; ANSWER SECTION:
+kubernetes.default.svc.cluster.local. 30 IN A	10.96.0.1
+
+;; Query time: 14 msec
+;; SERVER: 10.96.0.10#53(10.96.0.10)
+;; WHEN: Wed Mar 11 16:38:07 KST 2020
+;; MSG SIZE  rcvd: 129
+

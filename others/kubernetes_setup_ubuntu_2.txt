@@ -1,0 +1,340 @@
+# Kubernetes Setup from Scratch
+
+## Ubuntu 18.04
+ref: https://medium.com/finda-tech/overview-8d169b2a54ff
+ref: https://csleoss.etri.re.kr/images/contents/manual_1.0/1.6.KSB_K8s_install_Guide.html
+ref: https://www.inflearn.com/course/%EC%BF%A0%EB%B2%84%EB%84%A4%ED%8B%B0%EC%8A%A4-%EA%B8%B0%EC%B4%88/lecture/24556
+ref: https://vitux.com/install-and-deploy-kubernetes-on-ubuntu/
+
+
+- Docker 설치가 완료 되었으면, Docker 데몬이 사용하는 드라이버를 cgroupfs 대신 systemd를 사용하도록 설정한다.
+왜냐하면 kubernetes에서 권장하는 Docker 데몬의 드라이버는 systemd 이기 때문이고, systemd를 사용하면 kubernetes가 클러스터 노드에서 사용 가능한 자원을 쉽게 알 수 있도록 해주기 때문이다.
+아래 명령어를 통해 Docker 데몬의 드라이버를 교체한다.
+
+- Kubernetes 1.17 은 Docker 19.03 이상을 설치해야 함. 
+
+ref: https://kubernetes.io/docs/setup/production-environment/container-runtimes/
+
+* 아래는 master / slave 모두 설정
+```
+sudo cat > /etc/docker/daemon.json <<EOF
+{
+  "exec-opts": ["native.cgroupdriver=systemd"],
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "100m"
+  },
+  "storage-driver": "overlay2"
+}
+EOF
+```
+```
+sudo mkdir -p /etc/systemd/system/docker.service.d
+sudo systemctl daemon-reload
+sudo systemctl restart docker
+```
+
+-- Option :필요에 의해 ------------------------------
+```
+sudo apt-get install selinux-utils
+setenforce 0   # SELinux is disabled
+```
+```
+sudo apt-get install policycoreutils
+sestatus
+  disabled
+```
+```
+vi /etc/selinux/config
+  SELINUX=permissive로 변경
+```
+
+### Firewalls may be blocking the access
+```
+sudo ufw status verbose 
+sudo ufw disable 
+```
+
+### NetworkManager 비활성화  
+```
+systemctl stop NetworkManager && systemctl disable NetworkManager
+```
+-----------------------------------------------------------------------
+
+[root@k8s-master ~]# vi /etc/sysctl.d/k8s.conf
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+
+[root@k8s-master ~]# sysctl --system
+
+
+======== 1. Install Kubeadm
+ -- reposisotry 설정
+$curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+
+$ sudo apt-add-repository "deb http://apt.kubernetes.io/ kubernetes-xenial main"
+
+ -- install
+$ sudo apt install kubeadm
+
+swever@k8s-master:/etc/apt$ dpkg --list | grep kube
+ii  kubeadm                                1.17.4-00                          amd64        Kubernetes Cluster Bootstrapping Tool
+ii  kubectl                                1.17.4-00                          amd64        Kubernetes Command Line Tool
+ii  kubelet                                1.17.4-00                          amd64        Kubernetes Node Agent
+ii  kubernetes-cni                         0.7.5-00                           amd64        Kubernetes CNI
+
+# 설치 완료 확인
+$ kubeadm version
+$ kubelet --version
+$ kubectl version --client
+$ kubectl cluster-info
+
+=========================== 
+
+
+======== 2. Kubernetes Deployment
+
+$swapoff -a && sed -i '/ swap / s/^/#/' /etc/fstab
+
+------ master node 
+$ sudo hostnamectl set-hostname master-node   
+------ slave node 
+$ hostnamectl set-hostname slave-node
+
+
+------ API Server 주소 설정
+sudo kubeadm init --pod-network-cidr=10.244.0.0/16 --apiserver-advertise-address=10.177.191.46
+  : --apiserver-advertise-address 설정 ip 는 ifconfig 를 통해 확인
+
+
+### check token
+sudo kubeadm token list
+   if needed, sudo kubeadm create token
+
+### check hash value
+openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null | openssl dgst -sha256 -hex | sed 's/^.* //'
+
+### save token & hash for worker node
+cat > kubeadm_token.txt
+kubeadmjoin 10.0.3.15:6443 --token kkzp6f.n18v9uxrbgo8ld4l \
+--discovery-token-ca-cert-hash sha256:a1b89aca4f2781cba5a2d075dcf181f6425c2932fa07afb8655722bc74b15f83
+
+
+### Kubectl autocomplete
+
+source <(kubectl completion bash) # setup autocomplete in bash into the current shell, bash-completion package should be installed first.
+echo "source <(kubectl completion bash)" >> ~/.bashrc # add autocomplete permanently to your bash shell.
+
+alias k=kubectl
+complete -F __start_kubectl k
+
+
+
+
+------ To start using your cluster, you need to run the following as a regular user:
+
+[root@k8s-master ~]# mkdir -p $HOME/.kube
+[root@k8s-master ~]# cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+[root@k8s-master ~]# chown $(id -u):$(id -g) $HOME/.kube/config
+---------------------------------------------
+
+$ kubectl version   # 정상동작 확인
+$ kubectl get nodes
+swever@k8s-master:~$ kubectl get nodes
+NAME         STATUS     ROLES    AGE   VERSION
+k8s-master   NotReady   master   79s   v1.17.3
+
+
+$ kubectl get pods -o wide --all-namespaces
+swever@k8s-master:~$ kubectl get pods -o wide --all-namespaces
+NAMESPACE     NAME                                 READY   STATUS    RESTARTS   AGE     IP            NODE         NOMINATED NODE   READINESS GATES
+kube-system   coredns-6955765f44-9c9k8             0/1     Pending   0          2m49s   <none>        <none>       <none>           <none>
+kube-system   coredns-6955765f44-mtrrg             0/1     Pending   0          2m49s   <none>        <none>       <none>           <none>
+kube-system   etcd-k8s-master                      1/1     Running   0          2m46s   192.168.1.2   k8s-master   <none>           <none>
+kube-system   kube-apiserver-k8s-master            1/1     Running   0          2m46s   192.168.1.2   k8s-master   <none>           <none>
+kube-system   kube-controller-manager-k8s-master   1/1     Running   0          2m46s   192.168.1.2   k8s-master   <none>           <none>
+kube-system   kube-proxy-ls8pk                     1/1     Running   0          2m49s   192.168.1.2   k8s-master   <none>           <none>
+kube-system   kube-scheduler-k8s-master            1/1     Running   0          2m45s   192.168.1.2   k8s-master   <none>           <none>
+
+
+swever@k8s-master:~$ brctl show
+bridge name	bridge id		STP enabled	interfaces
+docker0		8000.0242e053de35	no	
+
+----------------------------------------
+##### End of Master node setup
+
+[tip]
+마스터노드를 워커노드로 함께 사용할 경우 (single node cluster 의 경우)
+$kubectl taint nodes --all node-role.kubernetes.io/master-
+---- 실행예 -----
+swever@k8s-master:~$ kubectl taint nodes --all node-role.kubernetes.io/master-
+node/k8s-master untainted
+error: taint "node-role.kubernetes.io/master" not found
+-------
+
+========= 3. Deploy a Pod Network through the master node
+ : Master node 에 Pod 로 node 간 네트워크 deploy
+
+** 3.1) flannel 
+$ sudo kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+$ kubectl get pods --all-namespaces
+  : 확인 
+or 
+** 3.2) Calico
+[root@k8s-master ~]# curl -O https://docs.projectcalico.org/v3.9/manifests/calico.yaml
+[root@k8s-master ~]# kubectl apply -f calico.yaml
+
+or
+** 3.3) Weave
+
+kubectl apply -f "https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 | tr -d '\n')"
+
+
+*** tip) Weave scope (visualization)
+
+$ kubectl create -f 'https://cloud.weave.works/launch/k8s/weavescope.yaml'
+$ kubectl get pods -n weave
+ == expose the service to external
+$ pod=$(kubectl get pod -n weave --selector=name=weave-scope-app -o jsonpath={.items..metadata.name})
+$ kubectl expose pod $pod -n weave --external-ip="172.17.0.32" --port=4040 --target-port=4040
+
+** Customized )
+https://kubernetes.io/docs/concepts/extend-kubernetes/compute-storage-net/network-plugins/#cni
+
+
+swever@k8s-master:~$ kubectl get pods -o wide --all-namespaces
+NAMESPACE     NAME                                 READY   STATUS    RESTARTS   AGE     IP            NODE         NOMINATED NODE   READINESS GATES
+kube-system   coredns-6955765f44-9c9k8             1/1     Running   0          5m3s    10.244.0.2    k8s-master   <none>           <none>
+kube-system   coredns-6955765f44-mtrrg             1/1     Running   0          5m3s    10.244.0.3    k8s-master   <none>           <none>
+kube-system   etcd-k8s-master                      1/1     Running   0          5m      192.168.1.2   k8s-master   <none>           <none>
+kube-system   kube-apiserver-k8s-master            1/1     Running   0          5m      192.168.1.2   k8s-master   <none>           <none>
+kube-system   kube-controller-manager-k8s-master   1/1     Running   0          5m      192.168.1.2   k8s-master   <none>           <none>
+kube-system   kube-flannel-ds-amd64-swwp9          1/1     Running   0          22s     192.168.1.2   k8s-master   <none>           <none>
+kube-system   kube-proxy-ls8pk                     1/1     Running   0          5m3s    192.168.1.2   k8s-master   <none>           <none>
+kube-system   kube-scheduler-k8s-master            1/1     Running   0          4m59s   192.168.1.2   k8s-master   <none>           <none>
+
+swever@k8s-master:~$ brctl show
+bridge name	bridge id		STP enabled	interfaces
+cni0		8000.062c5375b679	no		veth14a95a55
+							                  veth14bfa22d
+docker0		8000.0242e053de35	no	
+
+
+swever@k8s-master:~$ kubectl get svc --all-namespaces
+NAMESPACE     NAME         TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)                  AGE
+default       kubernetes   ClusterIP   10.96.0.1    <none>        443/TCP                  14h
+kube-system   kube-dns     ClusterIP   10.96.0.10   <none>        53/UDP,53/TCP,9153/TCP   14h
+
+
+
+========= 4. Add the slave node to the network in order to form a cluster
+
+$ sudo kubeadm join 192.168.100.6:6443 --token 06tl4c.oqn35jzecidg0r0m --discovery-token-ca-cert-hash sha256:c40f5fa0aba6ba311efcdb0e8cb637ae0eb8ce27b7a03d47be6d966142f2204c
+   : master node 에 kube init 시에 나온 token 반영
+   : $sudo kubeadm token create --print-join-command 로 확인 가능
+
+$ sudo kubectl get nodes
+(master) $ kubectl -n kube-system get cm kubeadm-config -oyaml
+
+swever@k8s-master:~$ kubectl get node -o wide
+NAME         STATUS   ROLES    AGE   VERSION   INTERNAL-IP   EXTERNAL-IP   OS-IMAGE             KERNEL-VERSION     CONTAINER-RUNTIME
+k8s-master   Ready    master   16h   v1.17.4   192.168.1.2   <none>        Ubuntu 18.04.4 LTS   5.3.0-40-generic   docker://19.3.8
+wsstation    Ready    <none>   62m   v1.17.4   192.168.1.8   <none>        Ubuntu 18.04.3 LTS   5.3.0-40-generic   docker://19.3.5
+
+
+
+========== 5. setup Dashboard : GCP
+(refered from : https://kubernetes.io/ko/docs/tasks/access-application-cluster/web-ui-dashboard/)
+
+
+1) yaml apply
+1-1) 토큰 불필요
+$ kubectl apply -f https://raw.githubusercontent.com/kubetm/kubetm.github.io/master/sample/practice/appendix/gcp-kubernetes-dashboard.yaml 
+
+Or 
+1-2) 토큰 필요
+$ kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.0.0-beta8/aio/deploy/recommended.yaml
+
+2) Token 생성 (아래 사이트 참조)
+  https://github.com/kubernetes/dashboard/blob/master/docs/user/access-control/creating-sample-user.md
+
+
+$ kubectl get pods -o wide --all-namespaces
+NAMESPACE              NAME                                         READY   STATUS    RESTARTS   AGE     IP            NODE         NOMINATED NODE   READINESS GATES
+kube-system            coredns-6955765f44-gqwlw                     1/1     Running   0          38m     10.244.0.4    k8s-master   <none>           <none>
+kube-system            coredns-6955765f44-vr28x                     1/1     Running   0          38m     10.244.0.2    k8s-master   <none>           <none>
+kube-system            etcd-k8s-master                              1/1     Running   0          38m     192.168.1.2   k8s-master   <none>           <none>
+kube-system            kube-apiserver-k8s-master                    1/1     Running   0          38m     192.168.1.2   k8s-master   <none>           <none>
+kube-system            kube-controller-manager-k8s-master           1/1     Running   0          38m     192.168.1.2   k8s-master   <none>           <none>
+kube-system            kube-flannel-ds-amd64-vj584                  1/1     Running   0          21m     192.168.1.2   k8s-master   <none>           <none>
+kube-system            kube-proxy-vxfgg                             1/1     Running   0          38m     192.168.1.2   k8s-master   <none>           <none>
+kube-system            kube-scheduler-k8s-master                    1/1     Running   0          38m     192.168.1.2   k8s-master   <none>           <none>
+kubernetes-dashboard   dashboard-metrics-scraper-7b8b58dc8b-hv4zb   1/1     Running   0          6m24s   10.244.0.6    k8s-master   <none>           <none>
+kubernetes-dashboard   kubernetes-dashboard-5f5f847d57-hthlg        1/1     Running   0          6m24s   10.244.0.5    k8s-master   <none>           <none>
+
+
+
+
+
+3) proxy 실행 (master node)
+$ nohup kubectl proxy /dev/null 2>&1 &
+
+or 
+--
+$ nohup kubectl proxy --port=8001 --address=192.168.20.135 --accept-hosts='^*$' /dev/null 2>&1 &
+[1] 92597
+--
+
+$ netstat -nlp | grep 8001
+tcp        0      0 192.168.20.135:8001     0.0.0.0:*               LISTEN      92597/kubectl
+
+3) 접속
+
+-- 접속
+http://127.0.0.1:8001/api/v1/namespaces/kube-system/services/https:kubernetes-dashboard:/proxy/#!/pod?namespace=default
+or
+토큰이 있는 경우:
+http://localhost:8001/api/v1/namespaces/kubernetes-dashboard/services/https:kubernetes-dashboard:/proxy/#/login
+ 
+위에서 생성한 토큰 입력
+
+------------------------------------
+
+swever@k8s-master:~$ kubectl get pods -o wide --all-namespaces
+NAMESPACE              NAME                                         READY   STATUS    RESTARTS   AGE     IP            NODE         NOMINATED NODE   READINESS GATES
+kube-system            coredns-6955765f44-gqwlw                     1/1     Running   0          14h     10.244.0.4    k8s-master   <none>           <none>
+kube-system            coredns-6955765f44-vr28x                     1/1     Running   0          14h     10.244.0.2    k8s-master   <none>           <none>
+kube-system            etcd-k8s-master                              1/1     Running   0          14h     192.168.1.2   k8s-master   <none>           <none>
+kube-system            kube-apiserver-k8s-master                    1/1     Running   0          14h     192.168.1.2   k8s-master   <none>           <none>
+kube-system            kube-controller-manager-k8s-master           1/1     Running   0          14h     192.168.1.2   k8s-master   <none>           <none>
+kube-system            kube-flannel-ds-amd64-vj584                  1/1     Running   0          14h     192.168.1.2   k8s-master   <none>           <none>
+kube-system            kube-proxy-vxfgg                             1/1     Running   0          14h     192.168.1.2   k8s-master   <none>           <none>
+kube-system            kube-scheduler-k8s-master                    1/1     Running   0          14h     192.168.1.2   k8s-master   <none>           <none>
+kubernetes-dashboard   dashboard-metrics-scraper-7b8b58dc8b-hw9xk   1/1     Running   0          7m58s   10.244.0.10   k8s-master   <none>           <none>
+kubernetes-dashboard   kubernetes-dashboard-5f5f847d57-8wn6v        1/1     Running   0          7m58s   10.244.0.9    k8s-master   <none>           <none>
+
+
+swever@k8s-master:~$ kubectl get svc -o wide --all-namespaces
+NAMESPACE              NAME                        TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)                  AGE     SELECTOR
+default                kubernetes                  ClusterIP   10.96.0.1       <none>        443/TCP                  14h     <none>
+kube-system            kube-dns                    ClusterIP   10.96.0.10      <none>        53/UDP,53/TCP,9153/TCP   14h     k8s-app=kube-dns
+kubernetes-dashboard   dashboard-metrics-scraper   ClusterIP   10.98.253.99    <none>        8000/TCP                 9m46s   k8s-app=dashboard-metrics-scraper
+kubernetes-dashboard   kubernetes-dashboard        ClusterIP   10.109.176.46   <none>        443/TCP                  9m46s   k8s-app=kubernetes-dashboard
+
+
+
+
+** dashboard 삭제
+[root@k8s-master ~]# kubectl delete pod -n kube-system kubernetes-dashboard-6b8c96cf8c-9n55b
+
+
+
+## 재설정
+[root@k8s-master ~]# kubeadm reset
+[root@k8s-node1 ~]# kubeadm reset
+[root@k8s-node2 ~]# kubeadm reset
+[root@k8s-master ~]# systemctl restart kubelet
+[root@k8s-node1 ~]# systemctl restart kubelet
+[root@k8s-node2 ~]# systemctl restart kubelet
+

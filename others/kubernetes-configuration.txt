@@ -1,0 +1,11 @@
+# Kubernetes Configuration
+
+## 자신이 로컬에서 빌드한 docker image 를 사용하는 경우
+imagePullPolicy: Never
+
+Your PODs are scheduled on your worker nodes. 
+Since you set imagePullPolicy to Never you need to make your image available to both nodes. 
+In other words, you need to build it on both nodes as you did on the master.
+
+
+

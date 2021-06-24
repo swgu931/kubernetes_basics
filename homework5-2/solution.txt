@@ -1,0 +1,136 @@
+docker-master@master:~$ mkdir wordpress
+docker-master@master:~$ cd wordpress
+docker-master@master:~/wordpress$ kubectl create secret generic mysql-password --from-literal=password=1q2w3e4r
+secret/mysql-password created
+docker-master@master:~/wordpress$ kubectl describe secret mysql-password 
+Name:         mysql-password
+Namespace:    default
+Labels:       <none>
+Annotations:  <none>
+
+Type:  Opaque
+
+Data
+====
+password:  8 bytes
+docker-master@master:~/wordpress$ cat > mysql.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+  labels:
+    app: mysql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+        - image: mysql:5.6
+          name: mysql
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-password
+                  key: password
+            - name: MYSQL_DATABASE
+              value: k8sdb
+            - name: MYSQL_USER
+              value: k8suser
+            - name: MYSQL_ROOT_HOST
+              value: '%'  
+            - name: MYSQL_PASSWORD
+              value: P@ssw0rd!!
+          ports:
+            - containerPort: 3306
+              name: mysql
+docker-master@master:~/wordpress$ kubectl create -f mysql.yaml 
+deployment.apps/mysql created
+docker-master@master:~/wordpress$ cat > mysql-service.yaml
+apiVersion: v1
+
+kind: Service
+metadata:
+  name: mysql
+  labels:
+    app: mysql
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3306
+  selector:
+    app: mysql 
+docker-master@master:~/wordpress$ kubectl create -f mysql-service.yaml 
+service/mysql created
+docker-master@master:~/wordpress$ kubectl get svc -o wide
+NAME                      TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)          AGE     SELECTOR
+kubernetes                ClusterIP   10.96.0.1       <none>        443/TCP          2d7h    <none>
+mysql                     ClusterIP   10.102.13.151   <none>        3306/TCP         18s     app=mysql
+springboot-web-service    ClusterIP   10.98.72.52     <none>        80/TCP           5h31m   app=springboot-web
+tomcat-nodeport-service   NodePort    10.97.240.26    <none>        8088:30001/TCP   4h45m   app=tomcat8
+docker-master@master:~/wordpress$ cat > wordpress.yaml
+apiVersion: apps/v1
+
+kind: Deployment
+metadata:
+  name: wordpress
+  labels:
+    app: wordpress
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wordpress
+  template:
+    metadata:
+      labels:
+        app: wordpress
+    spec:
+      containers:
+        - image: wordpress
+          name: wordpress
+          env:
+          - name: WORDPRESS_DB_HOST
+            value: mysql:3306
+          - name: WORDPRESS_DB_NAME
+            value: k8sdb
+          - name: WORDPRESS_DB_USER
+            value: k8suser
+          - name: WORDPRESS_DB_PASSWORD
+            value: 1q2w3e4r
+          ports:
+            - containerPort: 80
+              name: wordpress
+docker-master@master:~/wordpress$ kubectl create -f wordpress.yaml 
+deployment.apps/wordpress created
+docker-master@master:~/wordpress$ cat > wordpress-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: wordpress
+  name: wordpress
+spec:
+  type: NodePort
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+  selector:
+    app: wordpress
+docker-master@master:~/wordpress$ kubectl create -f wordpress-service.yaml 
+service/wordpress created
+docker-master@master:~/wordpress$ kubectl get svc -o wide
+NAME                      TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)          AGE     SELECTOR
+kubernetes                ClusterIP   10.96.0.1       <none>        443/TCP          2d7h    <none>
+mysql                     ClusterIP   10.102.13.151   <none>        3306/TCP         2m39s   app=mysql
+springboot-web-service    ClusterIP   10.98.72.52     <none>        80/TCP           5h33m   app=springboot-web
+tomcat-nodeport-service   NodePort    10.97.240.26    <none>        8088:30001/TCP   4h47m   app=tomcat8
+wordpress                 NodePort    10.107.112.0    <none>        80:30345/TCP     17s     app=wordpress
+docker-master@master:~/wordpress$ 

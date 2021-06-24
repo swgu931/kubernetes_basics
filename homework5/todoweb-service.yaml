@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: todoweb
+  labels:
+    app: todoweb
+spec:
+  selector:
+    app: todoweb
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      nodePort: 30003
+  type: NodePort

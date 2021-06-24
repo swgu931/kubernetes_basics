@@ -1,0 +1,20 @@
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: centos-cronjob
+spec:
+  schedule: "* * * * *"
+  startingDeadlineSeconds: 300
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: centos-container
+            image: centos:8
+            command: ["bash"]
+            args:
+            - "-c"
+            - "echo 'Hello World'; sleep 5; echo 'Bye'"
+          restartPolicy: Never
